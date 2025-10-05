@@ -1,0 +1,124 @@
+:root {
+  --bg: #ffffff; /* switched to white background */
+  --panel: rgba(0, 0, 0, 0.04);
+  --panel-border: rgba(0, 0, 0, 0.12);
+  --accent: #6b46c1;
+  --accent-2: #ff7ab6;
+  --text: #1e1e1e;
+  --text-dim: #4a4a4a;
+  font-family: 'Nunito', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji';
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+.ui-root {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 20px;
+}
+
+.top-bar {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  backdrop-filter: blur(12px);
+  background: linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.15));
+  border-bottom: 2px solid var(--panel-border);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.brand {
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  font-size: 20px;
+}
+
+.stats {
+  display: flex;
+  gap: 16px;
+  font-weight: 800;
+}
+.stats span { color: var(--text-dim); }
+
+.controls { 
+  pointer-events: auto;
+  display: flex; 
+  gap: 12px; 
+}
+
+.upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.upload input { display: none; }
+
+button#reset-btn {
+  padding: 10px 20px;
+  background: linear-gradient(180deg, #4a3fd4, #2e2a7e);
+  color: #fff;
+  border: 1px solid #5e55ea;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 14px;
+  transition: all 0.2s;
+  backdrop-filter: blur(10px);
+}
+
+button#reset-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(74, 63, 212, 0.3);
+}
+
+button#mute-btn {
+  padding: 10px 20px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 14px;
+  transition: all 0.2s;
+  backdrop-filter: blur(10px);
+}
+
+button#mute-btn:hover {
+  background: var(--panel-border);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+
+
+@media (max-width: 720px) {
+  .brand { font-size: 16px; }
+  .stats { font-size: 14px; gap: 10px; }
+}
