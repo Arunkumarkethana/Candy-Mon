@@ -269,14 +269,12 @@ export class GameScene extends Phaser.Scene {
       }
     } catch {}
 
-    if (!this.loadState()) {
-      // ensure image keys are available (wait for texture load if needed)
-      if (this.textureKeys.length === 0) {
-        // Fallback: proceed immediately since textures are already processed
-        this.time.delayedCall(0, () => this.createBoard())
-      } else {
-        this.createBoard()
-      }
+    // Always start fresh on load; do not auto-load previous saved games
+    try { localStorage.removeItem('cc_save') } catch {}
+    if (this.textureKeys.length === 0) {
+      this.time.delayedCall(0, () => this.createBoard())
+    } else {
+      this.createBoard()
     }
     // Guarantee playable state
     if (this.movesLeft <= 0) this.movesLeft = MOVE_LIMIT
