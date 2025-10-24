@@ -153,12 +153,10 @@ body.modal-open .footer-bar { display: none; }
   .footer-bar { display: none; }
 }
 
-/* Nudge game down slightly when HUD is expanded (mobile only) */
+/* Persistent top offset for board on mobile; larger when HUD open */
 @media (max-width: 720px) {
-  body.hud-open #app {
-    transform: translateY(56px);
-    transition: transform 180ms ease;
-  }
+  #app { transform: translateY(70px); transition: transform 180ms ease; }
+  body.hud-open #app { transform: translateY(120px); }
 }
 
 .brand {
