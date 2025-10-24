@@ -39,6 +39,23 @@ export class GameScene extends Phaser.Scene {
     line?: () => void
     bomb?: () => void
   }
+
+  // Explicitly resume AudioContext on first gesture for mobile autoplay policies
+  warmAudio() {
+    try {
+      const audioManager = this.sound as any
+      const ctx = audioManager.context || audioManager.audioContext
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {})
+      }
+      // Play a near-silent blip to fully unlock on iOS
+      const osc = ctx.createOscillator(); const gain = ctx.createGain()
+      gain.gain.value = 0.0001
+      osc.connect(gain).connect(ctx.destination)
+      osc.start(); osc.stop(ctx.currentTime + 0.02)
+      if (!this.muted && !this.bgmOsc) this.startBgm()
+    } catch {}
+  }
   // Smooth frequency sweep tone for line clears etc.
   private playToneSweep(start: number, end: number, duration = 0.2, volume = 0.35) {
     try {

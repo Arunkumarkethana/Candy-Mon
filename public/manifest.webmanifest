@@ -1,0 +1,12 @@
+{
+  "name": "Candy Mon — Match 3",
+  "short_name": "Candy Mon",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#120a2a",
+  "theme_color": "#1a1033",
+  "icons": [
+    { "src": "/vite.svg", "sizes": "192x192", "type": "image/svg+xml" },
+    { "src": "/vite.svg", "sizes": "512x512", "type": "image/svg+xml" }
+  ]
+}

@@ -134,6 +134,20 @@ window.addEventListener('UiShimmer', () => {
   setTimeout(() => bar.classList.remove('shimmer-on'), 1200)
 })
 
+// Register service worker (PWA)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {})
+  })
+}
+
+// Light haptics where supported
+function vibrate(ms: number) {
+  try { (navigator as any).vibrate?.(ms) } catch {}
+}
+window.addEventListener('GameMatch', () => vibrate(10))
+window.addEventListener('GameLevel', () => vibrate(20))
+
 
 // Dynamic contrast for UI based on background brightness
 function setUiThemeForBackground(url?: string) {
