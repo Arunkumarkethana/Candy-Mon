@@ -82,6 +82,13 @@ try {
   if (sheetMute) sheetMute.textContent = muted ? 'Unmute' : 'Mute'
 } catch {}
 
+// iOS audio unlock on first user gesture
+try {
+  const unlock = () => { getGameScene()?.warmAudio() }
+  window.addEventListener('pointerdown', unlock, { once: true })
+  window.addEventListener('touchend', unlock, { once: true, passive: true } as any)
+} catch {}
+
 // Initialize color-blind from persistence
 try {
   const cb = localStorage.getItem('cc_color_blind') === '1'
@@ -212,6 +219,7 @@ muteBtn?.addEventListener('click', () => {
     if (dockLabel) dockLabel.textContent = muted ? 'Unmute' : 'Mute'
     if (sheetMute) sheetMute.textContent = muted ? 'Unmute' : 'Mute'
   } catch {}
+  if (!muted) getGameScene()?.warmAudio()
 })
 
 // Reduced effects toggle
