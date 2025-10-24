@@ -20,6 +20,28 @@
           <div class="brand">Candy Mon</div>
           <div class="brand-progress"><div class="brand-progress-bar" style="width:0%"></div></div>
         </div>
+
+    <!-- Stats sheet overlay -->
+    <div id="stats-sheet" class="sheet" aria-hidden="true">
+      <div class="sheet-backdrop" role="button" aria-label="Close"></div>
+      <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Stats and settings">
+        <div class="sheet-handle"></div>
+        <div class="sheet-content">
+          <div class="sheet-grid">
+            <div class="sheet-card"><div class="k">Level</div><div id="sheet-level" class="v">1</div></div>
+            <div class="sheet-card"><div class="k">Goal</div><div id="sheet-goal" class="v">500</div></div>
+            <div class="sheet-card"><div class="k">Best</div><div id="sheet-best" class="v">0</div></div>
+          </div>
+          <div class="sheet-actions">
+            <button id="sheet-daily" class="dock-btn"><span>Daily</span></button>
+            <button id="sheet-fx" class="dock-btn"><span>FX</span></button>
+            <button id="sheet-mute" class="dock-btn"><span>Mute</span></button>
+            <button id="sheet-reset" class="dock-btn warn"><span>Reset</span></button>
+            <label class="sheet-volume">Vol <input id="sheet-volume" type="range" min="0" max="100" value="55" /></label>
+          </div>
+        </div>
+      </div>
+    </div>
         <div class="stats">
           <span id="score">Score: 0</span>
           <span id="moves">Moves: 30</span>
@@ -58,6 +80,26 @@
           <path d="M18.244 2H21L14.28 10.07 22 22h-6.16l-4.82-6.99L5.44 22H2l7.21-8.62L2 2h6.2l4.34 6.3L18.244 2Zm-2.16 18h1.52L7.98 4h-1.5l9.604 16Z"/>
         </svg>
       </a>
+    </div>
+
+    <!-- Bottom action dock (mobile) -->
+    <div class="bottom-dock" role="toolbar" aria-label="Game actions">
+      <button id="dock-daily" class="dock-btn" aria-label="Daily">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M7 11h10v2H7zM7 7h10v2H7zM7 15h7v2H7z"/></svg>
+        <span>Daily</span>
+      </button>
+      <button id="dock-fx" class="dock-btn" aria-label="FX">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M3 12h18M12 3v18" opacity=".35"/><circle cx="12" cy="12" r="5"/></svg>
+        <span>FX</span>
+      </button>
+      <button id="dock-mute" class="dock-btn" aria-label="Mute">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M5 9v6h4l5 5V4L9 9H5z"/></svg>
+        <span>Mute</span>
+      </button>
+      <button id="dock-reset" class="dock-btn warn" aria-label="Reset">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5a5 5 0 1 1-5-5z"/></svg>
+        <span>Reset</span>
+      </button>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

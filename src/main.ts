@@ -43,6 +43,14 @@ const dailyBtn = document.getElementById('daily-btn') as HTMLButtonElement | nul
 const bestEl = document.getElementById('best') as HTMLSpanElement | null
 const barToggle = document.getElementById('bar-toggle') as HTMLButtonElement | null
 const uiRoot = document.getElementById('ui-root') as HTMLDivElement | null
+// Bottom dock elements
+const dockDaily = document.getElementById('dock-daily') as HTMLButtonElement | null
+const dockFx = document.getElementById('dock-fx') as HTMLButtonElement | null
+const dockMute = document.getElementById('dock-mute') as HTMLButtonElement | null
+const dockReset = document.getElementById('dock-reset') as HTMLButtonElement | null
+// Mini-strip values
+const miniScore = document.getElementById('mini-score') as HTMLSpanElement | null
+const miniMoves = document.getElementById('mini-moves') as HTMLSpanElement | null
 
 resetBtn?.addEventListener('click', () => {
   getGameScene()?.resetBoard()
@@ -64,7 +72,8 @@ const touchEvents = ['touchstart','touchend','pointerdown','pointerup']
 const resetIdle = () => {
   clearTimeout(idleTimer)
   if (window.innerWidth <= 720) {
-    setCollapsed(false)
+    // Keep focus on board: default collapsed on mobile
+    setCollapsed(true)
     idleTimer = setTimeout(() => setCollapsed(true), 2500)
   }
 }
@@ -82,6 +91,12 @@ dailyBtn?.addEventListener('click', () => {
   getGameScene()?.startDaily()
   // reset UI best to daily session start (best remains all-time)
 })
+// Bottom dock bindings (with haptic taps)
+const tap = () => { try { (navigator as any).vibrate?.(8) } catch {} }
+dockDaily?.addEventListener('click', () => { tap(); getGameScene()?.startDaily() })
+dockFx?.addEventListener('click', () => { tap(); fxToggle?.click() })
+dockMute?.addEventListener('click', () => { tap(); muteBtn?.click() })
+dockReset?.addEventListener('click', () => { tap(); resetBtn?.click() })
 
 // Listen to scene events for UI updates
 window.addEventListener('GameScore', (ev: any) => {
@@ -90,6 +105,7 @@ window.addEventListener('GameScore', (ev: any) => {
     scoreEl.textContent = `Score: ${score}`
     pulse(scoreEl)
   }
+  if (miniScore) miniScore.textContent = String(score)
   updateBrandProgress(score)
   // Update best from localStorage if improved by scene
   try {
@@ -103,6 +119,7 @@ window.addEventListener('GameMoves', (ev: any) => {
     movesEl.textContent = `Moves: ${ev.detail}`
     pulse(movesEl)
   }
+  if (miniMoves) miniMoves.textContent = String(ev.detail)
 })
 window.addEventListener('GameLevel', (ev: any) => {
   if (levelEl) levelEl.textContent = `Level: ${ev.detail.level}`
