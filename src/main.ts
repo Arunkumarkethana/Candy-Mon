@@ -41,10 +41,35 @@ const fxToggle = document.getElementById('fx-toggle') as HTMLButtonElement | nul
 const volumeSlider = document.getElementById('volume') as HTMLInputElement | null
 const dailyBtn = document.getElementById('daily-btn') as HTMLButtonElement | null
 const bestEl = document.getElementById('best') as HTMLSpanElement | null
+const barToggle = document.getElementById('bar-toggle') as HTMLButtonElement | null
+const uiRoot = document.getElementById('ui-root') as HTMLDivElement | null
 
 resetBtn?.addEventListener('click', () => {
   getGameScene()?.resetBoard()
 })
+
+// HUD collapse toggle for mobile
+let collapsed = false
+const setCollapsed = (v: boolean) => {
+  collapsed = v
+  if (!uiRoot) return
+  if (collapsed) uiRoot.classList.add('collapsed')
+  else uiRoot.classList.remove('collapsed')
+}
+barToggle?.addEventListener('click', () => setCollapsed(!collapsed))
+
+// Auto-collapse after idle on mobile
+let idleTimer: any
+const touchEvents = ['touchstart','touchend','pointerdown','pointerup']
+const resetIdle = () => {
+  clearTimeout(idleTimer)
+  if (window.innerWidth <= 720) {
+    setCollapsed(false)
+    idleTimer = setTimeout(() => setCollapsed(true), 2500)
+  }
+}
+touchEvents.forEach(e => window.addEventListener(e, resetIdle, { passive: true }))
+resetIdle()
 
 // Volume slider -> scene volume
 volumeSlider?.addEventListener('input', () => {
@@ -78,6 +103,14 @@ window.addEventListener('GameMoves', (ev: any) => {
     movesEl.textContent = `Moves: ${ev.detail}`
     pulse(movesEl)
   }
+})
+window.addEventListener('GameLevel', (ev: any) => {
+  if (levelEl) levelEl.textContent = `Level: ${ev.detail.level}`
+  if (goalEl) goalEl.textContent = `Goal: ${ev.detail.goal}`
+  // Recompute progress with new goal
+  const scoreText = scoreEl?.textContent?.match(/\d+/)?.[0]
+  const currentScore = scoreText ? parseInt(scoreText, 10) : 0
+  updateBrandProgress(currentScore, ev.detail.goal)
 })
 window.addEventListener('GameLevel', (ev: any) => {
   if (levelEl) levelEl.textContent = `Level: ${ev.detail.level}`
