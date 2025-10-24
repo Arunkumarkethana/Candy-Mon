@@ -63,6 +63,10 @@ const setCollapsed = (v: boolean) => {
   if (!uiRoot) return
   if (collapsed) uiRoot.classList.add('collapsed')
   else uiRoot.classList.remove('collapsed')
+  try {
+    if (!collapsed) document.body.classList.add('hud-open')
+    else document.body.classList.remove('hud-open')
+  } catch {}
 }
 barToggle?.addEventListener('click', () => setCollapsed(!collapsed))
 

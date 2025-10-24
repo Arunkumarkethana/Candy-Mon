@@ -152,6 +152,14 @@ body.modal-open .footer-bar { display: none; }
   .ui-root { padding-top: calc(env(safe-area-inset-top, 0px) + 8px); }
 }
 
+/* Nudge game down slightly when HUD is expanded (mobile only) */
+@media (max-width: 720px) {
+  body.hud-open #app {
+    transform: translateY(56px);
+    transition: transform 180ms ease;
+  }
+}
+
 .brand {
   font-weight: 900;
   letter-spacing: 0.5px;
