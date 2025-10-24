@@ -252,10 +252,18 @@ export class GameScene extends Phaser.Scene {
       try { window.dispatchEvent(new CustomEvent('UiBackground', { detail: { url: undefined } })) } catch {}
     }
 
-    // Minimal title centered
-    this.add.text(360, 80, 'Candy Mon', {
-      fontFamily: 'Nunito', fontSize: '40px', color: '#1e1e1e', fontStyle: 'bold'
+    // Title with glowing highlight
+    const title = this.add.text(360, 80, 'Candy Mon', {
+      fontFamily: 'Nunito', fontSize: '44px', color: '#ffffff', fontStyle: 'bold'
     }).setOrigin(0.5)
+    title.setStroke('#7c3aed', 4)
+    title.setShadow(0, 0, '#7c3aed', 20, true, true)
+    this.tweens.add({ targets: title, scale: { from: 1.0, to: 1.03 }, alpha: { from: 0.95, to: 1 }, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    // Underline shimmer
+    const u = this.add.graphics()
+    u.fillStyle(0x7c3aed, 0.6)
+    u.fillRoundedRect(360 - 70, 108, 140, 4, 2)
+    this.tweens.add({ targets: u, alpha: { from: 0.35, to: 0.9 }, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
 
     this.sounds = {
       swap: () => this.playTone(420, 0.08, 0.30),
