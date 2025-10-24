@@ -127,6 +127,26 @@ body.modal-open .footer-bar { display: none; }
 }
 .ui-root.collapsed #bar-toggle svg { transform: rotate(180deg); }
 
+.mini-strip {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: 10px;
+  display: none;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+}
+.mini-strip span { display: inline-block; padding: 4px 8px; border-radius: 999px; }
+.mini-strip #mini-score { background: rgba(86, 204, 242, 0.25); }
+.mini-strip #mini-moves { background: rgba(255, 159, 67, 0.3); }
+
+.ui-root.collapsed .mini-strip { display: inline-flex; }
+
 @media (max-width: 720px) {
   #bar-toggle { display: inline-flex; align-items: center; justify-content: center; }
   .ui-root { padding-top: calc(env(safe-area-inset-top, 0px) + 8px); }
