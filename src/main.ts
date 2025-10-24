@@ -51,6 +51,17 @@ const dockReset = document.getElementById('dock-reset') as HTMLButtonElement | n
 // Mini-strip values
 const miniScore = document.getElementById('mini-score') as HTMLSpanElement | null
 const miniMoves = document.getElementById('mini-moves') as HTMLSpanElement | null
+// Stats sheet elements
+const sheet = document.getElementById('stats-sheet') as HTMLDivElement | null
+const sheetBackdrop = sheet?.querySelector('.sheet-backdrop') as HTMLDivElement | null
+const sheetLevel = document.getElementById('sheet-level') as HTMLDivElement | null
+const sheetGoal = document.getElementById('sheet-goal') as HTMLDivElement | null
+const sheetBest = document.getElementById('sheet-best') as HTMLDivElement | null
+const sheetDaily = document.getElementById('sheet-daily') as HTMLButtonElement | null
+const sheetFx = document.getElementById('sheet-fx') as HTMLButtonElement | null
+const sheetMute = document.getElementById('sheet-mute') as HTMLButtonElement | null
+const sheetReset = document.getElementById('sheet-reset') as HTMLButtonElement | null
+const sheetVol = document.getElementById('sheet-volume') as HTMLInputElement | null
 
 resetBtn?.addEventListener('click', () => {
   getGameScene()?.resetBoard()
@@ -116,6 +127,7 @@ window.addEventListener('GameScore', (ev: any) => {
     const raw = localStorage.getItem('cc_best')
     const best = raw ? parseInt(raw, 10) : 0
     if (bestEl) bestEl.textContent = `Best: ${best}`
+    if (sheetBest) sheetBest.textContent = String(best)
   } catch {}
 })
 window.addEventListener('GameMoves', (ev: any) => {
@@ -128,14 +140,8 @@ window.addEventListener('GameMoves', (ev: any) => {
 window.addEventListener('GameLevel', (ev: any) => {
   if (levelEl) levelEl.textContent = `Level: ${ev.detail.level}`
   if (goalEl) goalEl.textContent = `Goal: ${ev.detail.goal}`
-  // Recompute progress with new goal
-  const scoreText = scoreEl?.textContent?.match(/\d+/)?.[0]
-  const currentScore = scoreText ? parseInt(scoreText, 10) : 0
-  updateBrandProgress(currentScore, ev.detail.goal)
-})
-window.addEventListener('GameLevel', (ev: any) => {
-  if (levelEl) levelEl.textContent = `Level: ${ev.detail.level}`
-  if (goalEl) goalEl.textContent = `Goal: ${ev.detail.goal}`
+  if (sheetLevel) sheetLevel.textContent = String(ev.detail.level)
+  if (sheetGoal) sheetGoal.textContent = String(ev.detail.goal)
   // Recompute progress with new goal
   const scoreText = scoreEl?.textContent?.match(/\d+/)?.[0]
   const currentScore = scoreText ? parseInt(scoreText, 10) : 0
@@ -201,6 +207,22 @@ function vibrate(ms: number) {
 }
 window.addEventListener('GameMatch', () => vibrate(10))
 window.addEventListener('GameLevel', () => vibrate(20))
+
+// Open stats sheet from mini-strip (tap either number)
+miniScore?.addEventListener('click', () => sheet?.classList.add('open'))
+miniMoves?.addEventListener('click', () => sheet?.classList.add('open'))
+sheetBackdrop?.addEventListener('click', () => sheet?.classList.remove('open'))
+
+// Wire sheet controls to existing ones
+sheetDaily?.addEventListener('click', () => dockDaily?.click())
+sheetFx?.addEventListener('click', () => dockFx?.click())
+sheetMute?.addEventListener('click', () => dockMute?.click())
+sheetReset?.addEventListener('click', () => dockReset?.click())
+sheetVol?.addEventListener('input', () => {
+  const v = (parseInt(sheetVol.value, 10) || 0) / 100
+  getGameScene()?.setVolume(v)
+  if (volumeSlider) volumeSlider.value = String(Math.round(v * 100))
+})
 
 
 // Dynamic contrast for UI based on background brightness
