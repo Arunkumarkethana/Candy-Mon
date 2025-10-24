@@ -63,9 +63,19 @@ const sheetMute = document.getElementById('sheet-mute') as HTMLButtonElement | n
 const sheetReset = document.getElementById('sheet-reset') as HTMLButtonElement | null
 const sheetVol = document.getElementById('sheet-volume') as HTMLInputElement | null
 
+// Global audio state
+let muted = false
+
 resetBtn?.addEventListener('click', () => {
   getGameScene()?.resetBoard()
 })
+
+// Initialize mute labels on load
+try {
+  const dockLabel = dockMute?.querySelector('span')
+  if (dockLabel) dockLabel.textContent = muted ? 'Unmute' : 'Mute'
+  if (sheetMute) sheetMute.textContent = muted ? 'Unmute' : 'Mute'
+} catch {}
 
 // HUD collapse toggle for mobile
 let collapsed = false
@@ -171,11 +181,16 @@ function updateBrandProgress(score: number, goal?: number) {
 //
 
 // Mute
-let muted = false
 muteBtn?.addEventListener('click', () => {
   muted = !muted
   getGameScene()?.setMuted(muted)
   muteBtn.textContent = muted ? 'Unmute' : 'Mute'
+  // Reflect across dock and sheet
+  try {
+    const dockLabel = dockMute?.querySelector('span')
+    if (dockLabel) dockLabel.textContent = muted ? 'Unmute' : 'Mute'
+    if (sheetMute) sheetMute.textContent = muted ? 'Unmute' : 'Mute'
+  } catch {}
 })
 
 // Reduced effects toggle
