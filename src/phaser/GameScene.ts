@@ -185,6 +185,8 @@ export class GameScene extends Phaser.Scene {
       const t = ctx.currentTime
       osc.frequency.setValueAtTime(start, t)
       osc.frequency.linearRampToValueAtTime(end, t + duration)
+      gain.gain.value = volume * this.volume
+      osc.connect(gain).connect(ctx.destination)
       osc.start()
       gain.gain.exponentialRampToValueAtTime(0.0001, t + duration)
       osc.stop(t + duration + 0.02)
@@ -354,6 +356,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
+    // Ensure iOS audio unlock even if main.ts listener missed scene init timing
+    this.input.once('pointerdown', () => this.warmAudio())
+    const onVis = () => { if (document.visibilityState === 'visible' && !this.muted) this.warmAudio() }
+    document.addEventListener('visibilitychange', onVis)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      try { document.removeEventListener('visibilitychange', onVis) } catch {}
+    })
     // Background photo (cover)
     // Background photo (rotates by level if multiple are available)
     const bgKey = BG_URLS.length ? 'bg_photo' : '__MISSING'
@@ -1381,6 +1390,7 @@ export class GameScene extends Phaser.Scene {
   setMuted(m: boolean) {
     this.muted = m
     if (this.bgmGain) this.bgmGain.gain.value = this.muted ? 0 : 0.03
+    if (!this.muted) this.warmAudio()
     if (!this.muted && !this.bgmOsc) {
       if (this.sound.locked) this.sound.once(Phaser.Sound.Events.UNLOCKED, () => this.startBgm())
       else this.startBgm()
