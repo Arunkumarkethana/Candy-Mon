@@ -292,6 +292,12 @@ body.modal-open .footer-bar { display: none; }
 .sheet-card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 10px; text-align: center; }
 .sheet-card .k { font-size: 12px; opacity: 0.8; }
 .sheet-card .v { font-size: 16px; font-weight: 900; }
+.missions { display: grid; gap: 8px; margin: 8px 0 12px; }
+.mission-item { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; }
+.mission-label { font-size: 13px; color: #fff; opacity: 0.9; }
+.mission-bar { height: 6px; background: rgba(255,255,255,0.14); border-radius: 999px; overflow: hidden; grid-column: span 2; }
+.mission-bar > i { display: block; height: 100%; background: linear-gradient(90deg, #7c3aed, #5b21b6); width: 0%; }
+.mission-done { color: #8cff9a; font-weight: 800; font-size: 12px; }
 .sheet-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .sheet-volume { grid-column: span 2; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; }
 @keyframes sheetIn { from { transform: translateY(100%);} to { transform: translateY(0);} }

@@ -40,33 +40,148 @@ export class GameScene extends Phaser.Scene {
     bomb?: () => void
   }
 
+  private gridTop() { return GRID_TOP + this.gridYOffset }
+  private recomputeBoardTop() {
+    // Only adjust on wider screens (desktop). Mobile layout uses CSS transforms already.
+    const isMobile = window.innerWidth <= 720
+    if (isMobile) { this.gridYOffset = 0; return }
+    const canvasH = this.scale.height || 1280
+    const gridH = GRID_SIZE * CELL_PX
+    const minTop = 150 // space for title/progress/combo
+    const idealTop = Math.max(minTop, Math.floor((canvasH - gridH) / 2))
+    this.gridYOffset = idealTop - GRID_TOP
+    // Update mask if exists
+    if (this.maskGfxRef) {
+      this.maskGfxRef.clear()
+      this.maskGfxRef.fillStyle(0xffffff, 1)
+      this.maskGfxRef.fillRect(GRID_LEFT, this.gridTop(), GRID_SIZE * CELL_PX, GRID_SIZE * CELL_PX)
+      this.boardMask = this.maskGfxRef.createGeometryMask()
+      // Re-apply new mask to existing sprites
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          const cell = this.grid?.[r]?.[c]
+          if (cell?.sprite && this.boardMask) cell.sprite.setMask(this.boardMask)
+        }
+      }
+    }
+  }
+
+  // --- Chill Mode and streaks ---
+  setChillMode(v: boolean) {
+    this.chillMode = v
+    if (v) {
+      // reflect UI immediately
+      this.emitMoves()
+    }
+  }
+  private updateStreak() {
+    try {
+      const today = new Date(); today.setHours(0,0,0,0)
+      const key = 'cc_last_play'
+      const raw = localStorage.getItem(key)
+      const streakRaw = localStorage.getItem('cc_streak')
+      let streak = streakRaw ? parseInt(streakRaw, 10) : 0
+      if (!raw) {
+        streak = 1
+      } else {
+        const last = new Date(raw)
+        last.setHours(0,0,0,0)
+        const diff = (today.getTime() - last.getTime()) / (1000*60*60*24)
+        if (diff >= 1 && diff < 2) streak += 1
+        else if (diff >= 2) streak = 1
+      }
+      localStorage.setItem(key, today.toISOString())
+      localStorage.setItem('cc_streak', String(streak))
+      this.streak = streak
+      try { window.dispatchEvent(new CustomEvent('StreakUpdate', { detail: streak })) } catch {}
+    } catch {}
+  }
+  // --- Missions ---
+  private initMissions() {
+    this.missionRewarded = false
+    const kinds = this.getActiveKindCount()
+    const pickKind = () => Math.floor(this.rand() * kinds)
+    const m: { id: string, label: string, progress: number, target: number, done: boolean }[] = []
+    m.push({ id: `clr_${Date.now()}`, label: `Clear 8 of kind ${pickKind()+1}`, progress: 0, target: 8, done: false })
+    m.push({ id: `four_${Date.now()}`, label: 'Make one 4-match', progress: 0, target: 1, done: false })
+    m.push({ id: `combo_${Date.now()}`, label: 'Hit a x2 combo', progress: 0, target: 1, done: false })
+    this.missions = m
+  }
+  private emitMissions() {
+    try { window.dispatchEvent(new CustomEvent('MissionsUpdate', { detail: this.missions.map(x => ({ id: x.id, label: x.label, progress: x.progress, target: x.target, done: x.done })) })) } catch {}
+  }
+  private missionComboTwo() {
+    const m = this.missions.find(mm => mm.label.startsWith('Hit a x2'))
+    if (m && !m.done) { m.progress = 1; m.done = true; this.checkMissionReward(); this.emitMissions() }
+  }
+  private updateMissionsFromClear(groups: GridCell[][]) {
+    const byKind: Record<number, number> = {}
+    let fourMade = false
+    for (const g of groups) {
+      if (g.length >= 4) fourMade = true
+      for (const cell of g) {
+        byKind[cell.kind] = (byKind[cell.kind] || 0) + 1
+      }
+    }
+    // update clear-kind: choose the first clear-kind mission and advance with the most cleared color
+    const clearM = this.missions.find(mm => mm.label.startsWith('Clear 8'))
+    if (clearM && !clearM.done) {
+      const gained = Object.values(byKind).reduce((a,b) => a + b, 0)
+      clearM.progress = Math.min(clearM.target, clearM.progress + gained)
+      if (clearM.progress >= clearM.target) clearM.done = true
+    }
+    if (fourMade) {
+      const fm = this.missions.find(mm => mm.label.includes('4-match'))
+      if (fm && !fm.done) { fm.progress = 1; fm.done = true }
+    }
+    this.checkMissionReward()
+    this.emitMissions()
+  }
+  private checkMissionReward() {
+    if (this.missionRewarded) return
+    const doneCount = this.missions.filter(m => m.done).length
+    if (doneCount >= 2) {
+      this.missionRewarded = true
+      this.movesLeft += 3
+      this.emitMoves()
+      const t = this.add.text(360, 200, '+3 Moves!', { fontFamily: 'Nunito', fontSize: '40px', color: '#8cff9a' }).setOrigin(0.5)
+      this.tweens.add({ targets: t, y: 170, alpha: 0, duration: 900, onComplete: () => t.destroy() })
+    }
+  }
+
   // Explicitly resume AudioContext on first gesture for mobile autoplay policies
   warmAudio() {
     try {
       const audioManager = this.sound as any
-      const ctx = audioManager.context || audioManager.audioContext
+      const ctx = audioManager?.context || audioManager?.audioContext
       if (ctx && ctx.state === 'suspended') {
         ctx.resume().catch(() => {})
       }
       // Play a near-silent blip to fully unlock on iOS
+      if (!ctx) return
       const osc = ctx.createOscillator(); const gain = ctx.createGain()
+      osc.type = 'sine'; osc.frequency.value = 440
       gain.gain.value = 0.0001
       osc.connect(gain).connect(ctx.destination)
-      osc.start(); osc.stop(ctx.currentTime + 0.02)
-      if (!this.muted && !this.bgmOsc) this.startBgm()
+      osc.start(); setTimeout(() => { try { osc.stop(); osc.disconnect(); gain.disconnect() } catch {} }, 60)
+      // Start BGM if applicable
+      if (!this.muted && !this.bgmTimer) {
+        this.startBgm()
+      }
     } catch {}
   }
   // Smooth frequency sweep tone for line clears etc.
-  private playToneSweep(start: number, end: number, duration = 0.2, volume = 0.35) {
+  private playToneSweep(start: number, end: number, duration = 0.20, volume = 0.35) {
     try {
       if (this.muted) return
       const audioManager = this.sound as any
-      const ctx = audioManager.context || audioManager.audioContext || (window as any).AudioContext && new (window as any).AudioContext()
+      const ctx = audioManager?.context || audioManager?.audioContext
+      if (!ctx) return
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
-      osc.type = 'sawtooth'
-      gain.gain.value = volume * this.volume
-      osc.connect(gain).connect(ctx.destination)
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(start, ctx.currentTime)
+      osc.frequency.exponentialRampToValueAtTime(end, ctx.currentTime + duration)
       const t = ctx.currentTime
       osc.frequency.setValueAtTime(start, t)
       osc.frequency.linearRampToValueAtTime(end, t + duration)
@@ -76,20 +191,22 @@ export class GameScene extends Phaser.Scene {
     } catch {}
   }
   // Short noise burst for impact (bomb/line)
-  private playNoiseBurst(duration = 0.18, volume = 0.25) {
+  private playNoiseBurst(duration = 0.10, volume = 0.25) {
     try {
       if (this.muted) return
       const audioManager = this.sound as any
-      const ctx: AudioContext = audioManager.context || audioManager.audioContext || (window as any).AudioContext && new (window as any).AudioContext()
-      const buffer = ctx.createBuffer(1, ctx.sampleRate * duration, ctx.sampleRate)
+      const ctx = audioManager?.context || audioManager?.audioContext
+      if (!ctx) return
+      const bufferSize = 2 * ctx.sampleRate * duration
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
       const data = buffer.getChannelData(0)
-      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.6
-      const src = ctx.createBufferSource()
-      src.buffer = buffer
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+      const noise = ctx.createBufferSource()
+      noise.buffer = buffer
       const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 1200
       const gain = ctx.createGain(); gain.gain.value = volume * this.volume
-      src.connect(filter).connect(gain).connect(ctx.destination)
-      src.start()
+      noise.connect(filter).connect(gain).connect(ctx.destination)
+      noise.start()
       gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration)
     } catch {}
   }
@@ -118,6 +235,7 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(1500, () => emitter.destroy())
   }
   private boardMask?: Phaser.Display.Masks.GeometryMask
+  private maskGfxRef?: Phaser.GameObjects.Graphics
   private bgImage?: Phaser.GameObjects.Image
   private progressBar?: Phaser.GameObjects.Graphics
 
@@ -134,6 +252,21 @@ export class GameScene extends Phaser.Scene {
   private reducedFx = false
   private volume = 0.6
   private rng?: () => number
+  // Combo/Fever
+  private comboValue = 0 // 0..100
+  private fever = false
+  private comboBar?: Phaser.GameObjects.Graphics
+  private comboDecay?: Phaser.Time.TimerEvent
+  // Accessibility
+  private colorBlind = false
+  // Missions
+  private missions: { id: string, label: string, progress: number, target: number, done: boolean }[] = []
+  private missionRewarded = false
+  // Chill Mode and streaks
+  private chillMode = false
+  private streak = 0
+  // Desktop centering offset
+  private gridYOffset = 0
 
   constructor() {
     super(GameScene.KEY)
@@ -265,6 +398,15 @@ export class GameScene extends Phaser.Scene {
     u.fillRoundedRect(360 - 70, 108, 140, 4, 2)
     this.tweens.add({ targets: u, alpha: { from: 0.35, to: 0.9 }, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
 
+    // Combo meter UI under title
+    this.drawCombo()
+    // Start combo decay timer
+    this.comboDecay?.remove()
+    this.comboDecay = this.time.addEvent({ delay: 350, loop: true, callback: () => {
+      if (this.fever) return
+      if (this.comboValue > 0) { this.comboValue = Math.max(0, this.comboValue - 3); this.drawCombo() }
+    }})
+
     this.sounds = {
       swap: () => this.playTone(420, 0.08, 0.30),
       match: () => { this.playTone(720, 0.08, 0.40); this.playTone(860, 0.08, 0.24) },
@@ -296,20 +438,32 @@ export class GameScene extends Phaser.Scene {
 
     // Always start fresh on load; do not auto-load previous saved games
     try { localStorage.removeItem('cc_save') } catch {}
+    // Compute vertical centering offset for desktop (mobile handled by CSS)
+    this.recomputeBoardTop()
+    this.scale.on('resize', () => this.recomputeBoardTop())
     if (this.textureKeys.length === 0) {
       this.time.delayedCall(0, () => this.createBoard())
     } else {
       this.createBoard()
     }
+
+    // Initialize missions for this session
+    this.initMissions()
+    this.emitMissions()
+
     // Guarantee playable state
     if (this.movesLeft <= 0) this.movesLeft = MOVE_LIMIT
     this.updateUi()
 
+    // Daily streaks
+    this.updateStreak()
+
     // Create and apply board clipping mask
     const maskGfx = this.add.graphics()
     maskGfx.fillStyle(0xffffff, 1)
-    maskGfx.fillRect(GRID_LEFT, GRID_TOP, GRID_SIZE * CELL_PX, GRID_SIZE * CELL_PX)
+    maskGfx.fillRect(GRID_LEFT, this.gridTop(), GRID_SIZE * CELL_PX, GRID_SIZE * CELL_PX)
     this.boardMask = maskGfx.createGeometryMask()
+    this.maskGfxRef = maskGfx
     maskGfx.setVisible(false)
 
     // Apply mask to any sprites already created by createBoard/drawGrid
@@ -326,7 +480,7 @@ export class GameScene extends Phaser.Scene {
       
       // Find the cell that was clicked
       const col = Math.floor((worldX - GRID_LEFT) / CELL_PX)
-      const row = Math.floor((worldY - GRID_TOP) / CELL_PX)
+      const row = Math.floor((worldY - this.gridTop()) / CELL_PX)
       
       if (row >= 0 && row < GRID_SIZE && col >= 0 && col < GRID_SIZE) {
         const cell = this.grid[row][col]
@@ -623,7 +777,7 @@ export class GameScene extends Phaser.Scene {
         }
         
         const x = GRID_LEFT + c * CELL_PX + CELL_PX / 2
-        const y = GRID_TOP + r * CELL_PX + CELL_PX / 2
+        const y = this.gridTop() + r * CELL_PX + CELL_PX / 2
         const key = this.textureForKind(cell.kind)
         
         // Check if texture exists
@@ -643,6 +797,8 @@ export class GameScene extends Phaser.Scene {
         sprite.setScale(0.95)
         sprite.setDepth(1)
         if (this.boardMask) sprite.setMask(this.boardMask)
+        // Apply accessibility tint if enabled
+        this.applyTintForKind(sprite, cell.kind)
         
         if (initial) {
           sprite.setAlpha(0)
@@ -681,10 +837,10 @@ export class GameScene extends Phaser.Scene {
         })
         return
       }
-      this.movesLeft -= 1
+      if (!this.chillMode) this.movesLeft -= 1
       this.updateUi()
       await this.resolveMatchesLoop()
-      if (this.movesLeft <= 0) this.showGameOver()
+      if (!this.chillMode && this.movesLeft <= 0) this.showGameOver()
       else if (!this.hasAnyMoves()) this.shuffleBoard()
     })
   }
@@ -750,7 +906,7 @@ export class GameScene extends Phaser.Scene {
 
   // Light beam sweeping across a cleared row
   private sweepBeamRow(r: number) {
-    const y = GRID_TOP + r * CELL_PX + CELL_PX / 2
+    const y = this.gridTop() + r * CELL_PX + CELL_PX / 2
     const g = this.add.graphics()
     g.fillStyle(0xffffff, 0.14)
     g.fillRect(GRID_LEFT - 40, y - CELL_PX / 2, GRID_SIZE * CELL_PX + 80, CELL_PX)
@@ -764,7 +920,7 @@ export class GameScene extends Phaser.Scene {
     const x = GRID_LEFT + c * CELL_PX + CELL_PX / 2
     const g = this.add.graphics()
     g.fillStyle(0xffffff, 0.18)
-    g.fillRect(x - CELL_PX / 2, GRID_TOP - 40, CELL_PX, GRID_SIZE * CELL_PX + 80)
+    g.fillRect(x - CELL_PX / 2, this.gridTop() - 40, CELL_PX, GRID_SIZE * CELL_PX + 80)
     if (this.boardMask) g.setMask(this.boardMask)
     g.setAlpha(0)
     this.tweens.add({ targets: g, alpha: 0.35, duration: 80, yoyo: true, onComplete: () => g.destroy() })
@@ -792,7 +948,7 @@ export class GameScene extends Phaser.Scene {
   private cellCenter(cell: GridCell) {
     return {
       x: GRID_LEFT + cell.col * CELL_PX + CELL_PX / 2,
-      y: GRID_TOP + cell.row * CELL_PX + CELL_PX / 2
+      y: this.gridTop() + cell.row * CELL_PX + CELL_PX / 2
     }
   }
 
@@ -812,6 +968,7 @@ export class GameScene extends Phaser.Scene {
       await this.clearMatches(matches, combo)
       await this.dropAndRefill()
       if (combo >= 2) this.comboPopup(combo)
+      if (combo === 2) this.missionComboTwo()
       combo += 1
     }
     this.saveState()
@@ -979,7 +1136,12 @@ export class GameScene extends Phaser.Scene {
       }
     }
     
-    this.score += Math.floor(cleared * 10 * combo)
+    // Mission progress from this clear
+    this.updateMissionsFromClear(groups)
+    // Increase combo meter and handle Fever
+    this.addCombo(Math.min(40, cleared * 6 + (combo - 1) * 4))
+    const mult = this.fever ? 2 : 1
+    this.score += Math.floor(cleared * 10 * combo * mult)
     this.updateUi()
     this.updateBest()
     if (this.score >= this.goal) {
@@ -1039,6 +1201,7 @@ export class GameScene extends Phaser.Scene {
           sprite.setInteractive(new Phaser.Geom.Circle(0, 0, CELL_PX * 0.55), Phaser.Geom.Circle.Contains)
           if (this.boardMask) sprite.setMask(this.boardMask)
           cell.sprite = sprite
+          this.applyTintForKind(sprite, cell.kind)
           this.tweens.add({ targets: sprite, y: pos.y, scale: 0.95, alpha: 1, duration: 220, ease: 'Back.easeOut' })
         }
       }
@@ -1158,6 +1321,21 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5).setDepth(102)
     const btnHit = this.add.rectangle(cx, cy + 33, 160, 46, 0x000000, 0).setInteractive({ useHandCursor: true }).setDepth(103)
     btnHit.on('pointerdown', () => this.resetBoard())
+
+    // Share button (text-based Web Share)
+    const canShare = (navigator as any)?.share
+    if (canShare) {
+      const sbg = this.add.graphics({ x: cx - 240, y: cy + 10 }).setDepth(101)
+      sbg.fillStyle(0x223, 1).fillRoundedRect(0, 0, 140, 46, 12)
+      sbg.lineStyle(2, 0x556, 1).strokeRoundedRect(0, 0, 140, 46, 12)
+      this.add.text(cx - 170, cy + 33, 'Share', { fontFamily: 'Nunito', fontSize: '22px', color: '#ffffff' }).setOrigin(0.5).setDepth(102)
+      const sHit = this.add.rectangle(cx - 170, cy + 33, 140, 46, 0x000000, 0).setInteractive({ useHandCursor: true }).setDepth(103)
+      sHit.on('pointerdown', async () => {
+        try {
+          await (navigator as any).share({ title: 'Candy Mon — Score', text: `I scored ${this.score} on level ${this.level}!`, url: location.href })
+        } catch {}
+      })
+    }
 
     // Subtle scale-in
     gfx.setScale(0.9).setAlpha(0)
@@ -1386,11 +1564,64 @@ export class GameScene extends Phaser.Scene {
     return new Promise<void>(resolve => this.time.delayedCall(ms, () => resolve()))
   }
 
+  // --- Combo/Fever ---
+  private drawCombo() {
+    const w = 400, h = 8
+    const x = 360 - w/2, y = 138
+    if (!this.comboBar) this.comboBar = this.add.graphics().setDepth(6)
+    const g = this.comboBar
+    g.clear()
+    g.fillStyle(0x000000, 0.22); g.fillRoundedRect(x, y, w, h, 5)
+    const pct = Phaser.Math.Clamp(this.comboValue / 100, 0, 1)
+    const fill = Math.max(0, Math.floor(pct * w))
+    const color = this.fever ? 0xff7ab6 : 0x7c3aed
+    g.fillStyle(color, this.fever ? 1.0 : 0.9); g.fillRoundedRect(x, y, fill, h, 5)
+  }
+  private addCombo(v: number) {
+    this.comboValue = Phaser.Math.Clamp(this.comboValue + v, 0, 100)
+    if (!this.fever && this.comboValue >= 100) this.startFever()
+    this.drawCombo()
+  }
+  private startFever() {
+    if (this.fever) return
+    this.fever = true
+    this.comboValue = 100
+    this.drawCombo()
+    this.camZoomPulse()
+    // Stronger effects briefly
+    const cam = this.cameras.main
+    this.tweens.add({ targets: cam, zoom: 1.04, duration: 200, yoyo: true })
+    this.time.delayedCall(8000, () => this.endFever())
+  }
+  private endFever() {
+    this.fever = false
+    this.comboValue = 35
+    this.drawCombo()
+  }
+
+  // --- Accessibility: color-blind palette ---
+  setColorBlind(v: boolean) {
+    this.colorBlind = v
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const cell = this.grid[r][c]
+        if (cell?.sprite && cell.kind >= 0) this.applyTintForKind(cell.sprite, cell.kind)
+      }
+    }
+  }
+  private applyTintForKind(sprite: Phaser.GameObjects.Sprite, kind: number) {
+    if (!this.colorBlind) { sprite.clearTint(); return }
+    const palette = [0x1f77b4, 0xff7f0e, 0x2ca02c, 0xd62728, 0x9467bd, 0x8c564b, 0xe377c2, 0x17becf]
+    const tint = palette[kind % palette.length]
+    sprite.setTint(tint)
+  }
+
   private playTone(freq: number, duration = 0.12, volume = 0.4) {
     try {
       if (this.muted) return
       const audioManager = this.sound as any
-      const ctx = audioManager.context || audioManager.audioContext || (window as any).AudioContext && new (window as any).AudioContext()
+      const ctx = audioManager?.context || audioManager?.audioContext
+      if (!ctx) return
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
       osc.type = 'sine'

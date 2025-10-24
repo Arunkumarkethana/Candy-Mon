@@ -32,12 +32,26 @@
             <div class="sheet-card"><div class="k">Goal</div><div id="sheet-goal" class="v">500</div></div>
             <div class="sheet-card"><div class="k">Best</div><div id="sheet-best" class="v">0</div></div>
           </div>
+          <div id="sheet-missions" class="missions"></div>
           <div class="sheet-actions">
             <button id="sheet-daily" class="dock-btn"><span>Daily</span></button>
             <button id="sheet-fx" class="dock-btn"><span>FX</span></button>
             <button id="sheet-mute" class="dock-btn"><span>Mute</span></button>
             <button id="sheet-reset" class="dock-btn warn"><span>Reset</span></button>
             <label class="sheet-volume">Vol <input id="sheet-volume" type="range" min="0" max="100" value="55" /></label>
+            <label class="sheet-toggle" style="grid-column: span 2; display:flex; align-items:center; gap:10px; padding:8px 10px; background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:10px;">
+              <input id="sheet-colorblind" type="checkbox" />
+              <span>Color-blind palette</span>
+            </label>
+            <label class="sheet-toggle" style="grid-column: span 2; display:flex; align-items:center; gap:10px; padding:8px 10px; background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:10px;">
+              <input id="sheet-chill" type="checkbox" />
+              <span>Chill Mode (infinite moves)</span>
+            </label>
+            <button id="sheet-install" class="dock-btn" style="grid-column: span 1;"><span>Install App</span></button>
+            <label class="sheet-toggle" style="grid-column: span 1; display:flex; align-items:center; gap:10px; padding:8px 10px; background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:10px;">
+              <input id="sheet-reminder" type="checkbox" />
+              <span>Daily reminder</span>
+            </label>
           </div>
         </div>
       </div>

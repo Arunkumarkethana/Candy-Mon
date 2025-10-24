@@ -62,6 +62,11 @@ const sheetFx = document.getElementById('sheet-fx') as HTMLButtonElement | null
 const sheetMute = document.getElementById('sheet-mute') as HTMLButtonElement | null
 const sheetReset = document.getElementById('sheet-reset') as HTMLButtonElement | null
 const sheetVol = document.getElementById('sheet-volume') as HTMLInputElement | null
+const sheetColorBlind = document.getElementById('sheet-colorblind') as HTMLInputElement | null
+const sheetChill = document.getElementById('sheet-chill') as HTMLInputElement | null
+const sheetInstall = document.getElementById('sheet-install') as HTMLButtonElement | null
+const sheetReminder = document.getElementById('sheet-reminder') as HTMLInputElement | null
+const sheetMissions = document.getElementById('sheet-missions') as HTMLDivElement | null
 
 // Global audio state
 let muted = false
@@ -75,6 +80,22 @@ try {
   const dockLabel = dockMute?.querySelector('span')
   if (dockLabel) dockLabel.textContent = muted ? 'Unmute' : 'Mute'
   if (sheetMute) sheetMute.textContent = muted ? 'Unmute' : 'Mute'
+} catch {}
+
+// Initialize color-blind from persistence
+try {
+  const cb = localStorage.getItem('cc_color_blind') === '1'
+  sheetColorBlind && (sheetColorBlind.checked = cb)
+  getGameScene()?.setColorBlind(cb)
+} catch {}
+
+// Initialize Chill Mode and Reminder from persistence
+try {
+  const chill = localStorage.getItem('cc_chill') === '1'
+  sheetChill && (sheetChill.checked = chill)
+  getGameScene()?.setChillMode(chill)
+  const rem = localStorage.getItem('cc_daily_rem') === '1'
+  sheetReminder && (sheetReminder.checked = rem)
 } catch {}
 
 // HUD collapse toggle for mobile
@@ -237,6 +258,67 @@ sheetVol?.addEventListener('input', () => {
   const v = (parseInt(sheetVol.value, 10) || 0) / 100
   getGameScene()?.setVolume(v)
   if (volumeSlider) volumeSlider.value = String(Math.round(v * 100))
+})
+
+sheetColorBlind?.addEventListener('change', () => {
+  const v = !!sheetColorBlind.checked
+  try { localStorage.setItem('cc_color_blind', v ? '1' : '0') } catch {}
+  getGameScene()?.setColorBlind(v)
+})
+
+sheetChill?.addEventListener('change', () => {
+  const v = !!sheetChill.checked
+  try { localStorage.setItem('cc_chill', v ? '1' : '0') } catch {}
+  getGameScene()?.setChillMode(v)
+})
+
+sheetReminder?.addEventListener('change', () => {
+  const v = !!sheetReminder.checked
+  try { localStorage.setItem('cc_daily_rem', v ? '1' : '0') } catch {}
+})
+
+// Missions rendering
+window.addEventListener('MissionsUpdate', (ev: any) => {
+  if (!sheetMissions) return
+  const list = ev.detail as Array<{ id: string, label: string, progress: number, target: number, done: boolean }>
+  sheetMissions.innerHTML = ''
+  list.forEach(m => {
+    const wrap = document.createElement('div')
+    wrap.className = 'mission-item'
+    const label = document.createElement('div')
+    label.className = 'mission-label'
+    label.textContent = m.label
+    const status = document.createElement('div')
+    status.className = 'mission-done'
+    status.textContent = m.done ? 'Done' : `${m.progress}/${m.target}`
+    const bar = document.createElement('div')
+    bar.className = 'mission-bar'
+    const fill = document.createElement('i')
+    const pct = Math.min(100, Math.floor((m.progress / m.target) * 100))
+    fill.style.width = pct + '%'
+    bar.appendChild(fill)
+    wrap.appendChild(label)
+    wrap.appendChild(status)
+    wrap.appendChild(bar)
+    sheetMissions.appendChild(wrap)
+  })
+})
+
+// PWA install prompt handling
+let deferredPrompt: any
+window.addEventListener('beforeinstallprompt', (e: any) => {
+  e.preventDefault()
+  deferredPrompt = e
+  if (sheetInstall) sheetInstall.style.display = 'inline-flex'
+})
+sheetInstall?.addEventListener('click', async () => {
+  try {
+    if (!deferredPrompt) return
+    deferredPrompt.prompt()
+    await deferredPrompt.userChoice
+    deferredPrompt = null
+    if (sheetInstall) sheetInstall.style.display = 'none'
+  } catch {}
 })
 
 
