@@ -31,10 +31,6 @@ export class GameScene extends Phaser.Scene {
   private level = 1
   private goal = START_GOAL
   private textureKeys: string[] = []
-  // default colors used when generating fallback candies
-  private defaultColors = [
-    0xff6ec7, 0xffd166, 0x8cff9a, 0x6ecbff, 0xd66bff, 0xff8fa3
-  ]
 
   private sounds!: {
     swap: () => void
@@ -43,22 +39,84 @@ export class GameScene extends Phaser.Scene {
     line?: () => void
     bomb?: () => void
   }
+  // Smooth frequency sweep tone for line clears etc.
+  private playToneSweep(start: number, end: number, duration = 0.2, volume = 0.35) {
+    try {
+      if (this.muted) return
+      const audioManager = this.sound as any
+      const ctx = audioManager.context || audioManager.audioContext || (window as any).AudioContext && new (window as any).AudioContext()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sawtooth'
+      gain.gain.value = volume * this.volume
+      osc.connect(gain).connect(ctx.destination)
+      const t = ctx.currentTime
+      osc.frequency.setValueAtTime(start, t)
+      osc.frequency.linearRampToValueAtTime(end, t + duration)
+      osc.start()
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration)
+      osc.stop(t + duration + 0.02)
+    } catch {}
+  }
+  // Short noise burst for impact (bomb/line)
+  private playNoiseBurst(duration = 0.18, volume = 0.25) {
+    try {
+      if (this.muted) return
+      const audioManager = this.sound as any
+      const ctx: AudioContext = audioManager.context || audioManager.audioContext || (window as any).AudioContext && new (window as any).AudioContext()
+      const buffer = ctx.createBuffer(1, ctx.sampleRate * duration, ctx.sampleRate)
+      const data = buffer.getChannelData(0)
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.6
+      const src = ctx.createBufferSource()
+      src.buffer = buffer
+      const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 1200
+      const gain = ctx.createGain(); gain.gain.value = volume * this.volume
+      src.connect(filter).connect(gain).connect(ctx.destination)
+      src.start()
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration)
+    } catch {}
+  }
+
+  private camZoomPulse() {
+    const cam = this.cameras.main
+    this.tweens.add({ targets: cam, zoom: 1.05, duration: 140, yoyo: true, ease: 'Sine.easeOut' })
+  }
+
+  // API from UI: reduce heavy VFX
+  setReducedEffects(v: boolean) { this.reducedFx = v }
+
+  private confettiBurst() {
+    if (this.reducedFx) return
+    const colors = [0xff7ab6, 0x6b46c1, 0xffd166, 0x66e3ff, 0x8cff9a]
+    const emitter = this.add.particles(360, 0, 'spark', {
+      speed: 240,
+      gravityY: 600,
+      lifespan: 1200,
+      quantity: 0,
+      scale: { start: 1.2, end: 0 },
+      tint: colors,
+      angle: { min: 240, max: 300 }
+    })
+    emitter.explode(this.reducedFx ? 24 : 48, 360, 40)
+    this.time.delayedCall(1500, () => emitter.destroy())
+  }
   private boardMask?: Phaser.Display.Masks.GeometryMask
   private bgImage?: Phaser.GameObjects.Image
   private progressBar?: Phaser.GameObjects.Graphics
-  private starTexts: Phaser.GameObjects.Text[] = []
 
   private idleTimer?: Phaser.Time.TimerEvent
   private hintSprites: Phaser.GameObjects.Sprite[] = []
   private gameOverShown = false
   // boosters removed; keep placeholder to avoid refactors
-  private booster: null = null
   private muted = false
   private bgmGain?: GainNode
   private bgmOsc?: OscillatorNode
   private bgmTimer?: Phaser.Time.TimerEvent
   private dragStart?: { x: number, y: number }
   private isSwapping = false
+  private reducedFx = false
+  private volume = 0.6
+  private rng?: () => number
 
   constructor() {
     super(GameScene.KEY)
@@ -166,12 +224,15 @@ export class GameScene extends Phaser.Scene {
           document.body.style.backgroundPosition = 'center'
           document.body.style.backgroundRepeat = 'no-repeat'
           document.body.style.backgroundAttachment = 'fixed'
+          // Notify UI to adapt contrast
+          window.dispatchEvent(new CustomEvent('UiBackground', { detail: { url } }))
         }
       } catch {}
     } else {
       bg.destroy()
       // Clear page background if no bg
       document.body.style.backgroundImage = ''
+      try { window.dispatchEvent(new CustomEvent('UiBackground', { detail: { url: undefined } })) } catch {}
     }
 
     // Minimal title centered
@@ -180,11 +241,11 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5)
 
     this.sounds = {
-      swap: () => this.playTone(360, 0.08, 0.3),
-      match: () => this.playTone(720, 0.12, 0.4),
-      drop: () => this.playTone(280, 0.06, 0.25),
-      line: () => this.playTone(540, 0.1, 0.35),
-      bomb: () => this.playTone(220, 0.16, 0.5)
+      swap: () => this.playTone(420, 0.08, 0.30),
+      match: () => { this.playTone(720, 0.08, 0.40); this.playTone(860, 0.08, 0.24) },
+      drop: () => this.playTone(300, 0.06, 0.22),
+      line: () => { this.playToneSweep(520, 920, 0.18, 0.32); this.playNoiseBurst(0.10, 0.10) },
+      bomb: () => { this.playTone(220, 0.18, 0.45); this.playNoiseBurst(0.18, 0.22) }
     }
 
     // Simple background tone using an oscillator; start after user gesture/unlock
@@ -195,6 +256,18 @@ export class GameScene extends Phaser.Scene {
         this.input.once('pointerdown', () => this.startBgm())
       }
     }
+
+    // Daily mode RNG setup from localStorage
+    try {
+      const on = localStorage.getItem('cc_daily_on') === '1'
+      const seedStr = localStorage.getItem('cc_daily_seed') || ''
+      if (on && seedStr) {
+        const seed = parseInt(seedStr, 10) >>> 0
+        this.rng = this.makeRng(seed)
+      } else {
+        this.rng = undefined
+      }
+    } catch {}
 
     if (!this.loadState()) {
       // ensure image keys are available (wait for texture load if needed)
@@ -279,9 +352,29 @@ export class GameScene extends Phaser.Scene {
     })
     this.input.on('pointerup', () => { this.dragStart = undefined })
 
+    // Parallax tilt using camera rotation
+    const cam = this.cameras.main
+    const center = { x: 360, y: 640 }
+    const maxRot = (window.innerWidth < 800) ? 0.02 : 0.035 // smaller tilt on small screens
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      const nx = Phaser.Math.Clamp((p.worldX - center.x) / 360, -1, 1)
+      const ny = Phaser.Math.Clamp((p.worldY - center.y) / 640, -1, 1)
+      const rot = Phaser.Math.Clamp((nx - ny) * 0.02, -maxRot, maxRot)
+      this.tweens.add({ targets: cam, rotation: rot, duration: 120, ease: 'Sine.easeOut' })
+    })
+    this.input.on('pointerup', () => {
+      this.tweens.add({ targets: cam, rotation: 0, duration: 220, ease: 'Sine.easeOut' })
+    })
+
     this.updateUi()
 
     this.resetIdleTimer()
+
+    // Auto FX off on low FPS devices
+    this.time.delayedCall(3200, () => {
+      const fps = (this.game.loop as any)?.actualFps || 60
+      if (fps < 40) this.reducedFx = true
+    })
   }
 
   async setCustomImages(objectUrls: string[]) {
@@ -359,14 +452,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   resetBoard() {
-    this.children.removeAll()
-    this.score = 0
-    this.movesLeft = MOVE_LIMIT
-    this.level = 1
-    this.goal = START_GOAL
-    this.gameOverShown = false
-    this.create()
-    this.saveState()
+    try { localStorage.removeItem('cc_save') } catch {}
+    // Restart the scene to fully reset state and visuals cleanly
+    this.scene.restart()
   }
 
   private emitScore() {
@@ -487,7 +575,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private randomKind(): number {
-    return Math.floor(Math.random() * this.getActiveKindCount())
+    const r = this.rand()
+    return Math.floor(r * this.getActiveKindCount())
+  }
+
+  private rand(): number {
+    if (this.rng) return this.rng()
+    return Math.random()
   }
 
   private textureForKind(kind: number) {
@@ -520,7 +614,8 @@ export class GameScene extends Phaser.Scene {
         tile.setStrokeStyle(1, 0x000000, 0.06)
         tile.setDepth(0)
         const sprite = this.add.sprite(x, y, key)
-        sprite.setInteractive()
+        // Larger circular hit area for easier touches
+        sprite.setInteractive(new Phaser.Geom.Circle(0, 0, CELL_PX * 0.55), Phaser.Geom.Circle.Contains)
         sprite.setData('cell', cell)
         sprite.setScale(0.95)
         sprite.setDepth(1)
@@ -557,7 +652,10 @@ export class GameScene extends Phaser.Scene {
       if (matches.length === 0) {
         // swap back
         this.swapCells(a, b)
-        this.animateSwap(a, b)
+        this.animateSwap(a, b, () => {
+          if (a.sprite) this.shake(a.sprite)
+          if (b.sprite) this.shake(b.sprite)
+        })
         return
       }
       this.movesLeft -= 1
@@ -579,8 +677,93 @@ export class GameScene extends Phaser.Scene {
   private animateSwap(a: GridCell, b: GridCell, onComplete?: () => void) {
     const ta = this.cellCenter(a)
     const tb = this.cellCenter(b)
-    this.tweens.add({ targets: a.sprite, x: ta.x, y: ta.y, duration: 140, ease: 'Sine.easeInOut' })
-    this.tweens.add({ targets: b.sprite, x: tb.x, y: tb.y, duration: 140, ease: 'Sine.easeInOut', onComplete })
+    // Squash & stretch during movement
+    this.tweens.add({ targets: [a.sprite, b.sprite], scaleX: 1.08, scaleY: 0.88, duration: 90, yoyo: true, ease: 'Sine.easeInOut' })
+    // Trails that follow sprites briefly
+    if (a.sprite) this.attachTrail(a.sprite, 160)
+    if (b.sprite) this.attachTrail(b.sprite, 160)
+    this.tweens.add({ targets: a.sprite, x: ta.x, y: ta.y, duration: 160, ease: 'Quart.easeInOut' })
+    this.tweens.add({ targets: b.sprite, x: tb.x, y: tb.y, duration: 160, ease: 'Quart.easeInOut', onComplete })
+  }
+
+  private shake(sprite: Phaser.GameObjects.Sprite) {
+    const ox = sprite.x
+    this.tweens.add({
+      targets: sprite,
+      x: { from: ox - 8, to: ox + 8 },
+      duration: 60,
+      yoyo: true,
+      repeat: 1,
+      ease: 'Sine.easeInOut',
+      onComplete: () => sprite.setX(ox)
+    })
+  }
+
+  // Create a short-lived particle trail following a sprite
+  private attachTrail(sprite: Phaser.GameObjects.Sprite, lifeMs = 180) {
+    const emitter = this.add.particles(0, 0, 'spark', {
+      lifespan: 450,
+      speed: 40,
+      quantity: 2,
+      scale: { start: 0.6, end: 0 },
+      alpha: { start: 0.9, end: 0 },
+      frequency: 18,
+      follow: sprite
+    })
+    if (this.boardMask) emitter.setMask(this.boardMask)
+    this.time.delayedCall(lifeMs, () => emitter.destroy())
+  }
+
+  // Show a combo popup near the top of the board
+  private comboPopup(combo: number) {
+    const words = ['Nice!', 'Sweet!', 'Epic!', 'Legend!']
+    const msg = words[Math.min(words.length - 1, combo - 2)]
+    const t = this.add.text(360, 110, `${msg} x${combo}`, { fontFamily: 'Nunito', fontSize: '32px', color: '#ffd166' })
+      .setOrigin(0.5)
+    t.setAlpha(0)
+    this.tweens.add({ targets: t, alpha: 1, y: 96, duration: 220, ease: 'Back.easeOut' })
+    this.tweens.add({ targets: t, alpha: 0, y: 80, delay: 700, duration: 280, onComplete: () => t.destroy() })
+  }
+
+  // Light beam sweeping across a cleared row
+  private sweepBeamRow(r: number) {
+    const y = GRID_TOP + r * CELL_PX + CELL_PX / 2
+    const g = this.add.graphics()
+    g.fillStyle(0xffffff, 0.14)
+    g.fillRect(GRID_LEFT - 40, y - CELL_PX / 2, GRID_SIZE * CELL_PX + 80, CELL_PX)
+    if (this.boardMask) g.setMask(this.boardMask)
+    g.setAlpha(0)
+    this.tweens.add({ targets: g, alpha: 0.35, duration: 80, yoyo: true, onComplete: () => g.destroy() })
+  }
+
+  // Light beam sweeping across a cleared column
+  private sweepBeamCol(c: number) {
+    const x = GRID_LEFT + c * CELL_PX + CELL_PX / 2
+    const g = this.add.graphics()
+    g.fillStyle(0xffffff, 0.18)
+    g.fillRect(x - CELL_PX / 2, GRID_TOP - 40, CELL_PX, GRID_SIZE * CELL_PX + 80)
+    if (this.boardMask) g.setMask(this.boardMask)
+    g.setAlpha(0)
+    this.tweens.add({ targets: g, alpha: 0.35, duration: 80, yoyo: true, onComplete: () => g.destroy() })
+  }
+
+  // Expanding shockwave circle for bomb clears
+  private shockwave(cell: GridCell) {
+    const p = this.cellCenter(cell)
+    const g = this.add.graphics()
+    g.lineStyle(4, 0xffffff, 0.5)
+    g.strokeCircle(p.x, p.y, 1)
+    if (this.boardMask) g.setMask(this.boardMask)
+    this.tweens.add({
+      targets: g,
+      alpha: 0,
+      duration: 420,
+      onUpdate: (tw) => {
+        const v = 1 + tw.progress * CELL_PX * 2
+        g.clear(); g.lineStyle(6, 0xffffff, 0.5); g.strokeCircle(p.x, p.y, v)
+      },
+      onComplete: () => g.destroy()
+    })
   }
 
   private cellCenter(cell: GridCell) {
@@ -605,6 +788,7 @@ export class GameScene extends Phaser.Scene {
       if (!matches.length) break
       await this.clearMatches(matches, combo)
       await this.dropAndRefill()
+      if (combo >= 2) this.comboPopup(combo)
       combo += 1
     }
     this.saveState()
@@ -774,7 +958,11 @@ export class GameScene extends Phaser.Scene {
     
     this.score += Math.floor(cleared * 10 * combo)
     this.updateUi()
+    this.updateBest()
     if (this.score >= this.goal) {
+      // Goal reached celebration: UI shimmer + quick camera zoom pulse
+      try { window.dispatchEvent(new CustomEvent('UiShimmer')) } catch {}
+      this.camZoomPulse()
       this.level += 1
       this.goal = Math.floor(this.goal * 1.7)
       this.movesLeft += 10
@@ -798,7 +986,11 @@ export class GameScene extends Phaser.Scene {
               this.grid[r][c].sprite = above.sprite
               if (above.sprite) {
                 const to = this.cellCenter({ row: r, col: c, kind: above.kind })
-                this.tweens.add({ targets: above.sprite, x: to.x, y: to.y, duration: 160 })
+                this.tweens.add({ targets: above.sprite, x: to.x, y: to.y, duration: 180, ease: 'Cubic.easeIn',
+                  onComplete: () => {
+                    if (above.sprite) this.tweens.add({ targets: above.sprite, scale: 0.96, yoyo: true, duration: 80 })
+                  }
+                })
               }
               above.kind = -1
               above.sprite = undefined
@@ -819,10 +1011,12 @@ export class GameScene extends Phaser.Scene {
           const pos = this.cellCenter(cell)
           const key = this.textureForKind(cell.kind)
           const sprite = this.add.sprite(pos.x, pos.y - CELL_PX * 1.5, key)
-          sprite.setScale(0.9)
+          sprite.setScale(0.8)
+          sprite.setAlpha(0.85)
+          sprite.setInteractive(new Phaser.Geom.Circle(0, 0, CELL_PX * 0.55), Phaser.Geom.Circle.Contains)
           if (this.boardMask) sprite.setMask(this.boardMask)
           cell.sprite = sprite
-          this.tweens.add({ targets: sprite, y: pos.y, duration: 180 })
+          this.tweens.add({ targets: sprite, y: pos.y, scale: 0.95, alpha: 1, duration: 220, ease: 'Back.easeOut' })
         }
       }
     }
@@ -913,17 +1107,45 @@ export class GameScene extends Phaser.Scene {
   private showGameOver() {
     if (this.gameOverShown) return
     this.gameOverShown = true
-    const w = 520, h = 260
     const cx = 360, cy = 640
-    const panel = this.add.rectangle(cx, cy, w, h, 0x000000, 0.6).setStrokeStyle(2, 0xffffff, 0.4)
-    const title = this.add.text(cx, cy - 40, 'Out of moves!', { fontFamily: 'Nunito', fontSize: '42px', color: '#ffffff' }).setOrigin(0.5)
-    const btn = this.add.text(cx, cy + 40, 'Tap to Reset', { fontFamily: 'Nunito', fontSize: '28px', color: '#ffd166', backgroundColor: '#2e2a7e' })
-      .setPadding(10, 8, 10, 8).setOrigin(0.5).setInteractive({ useHandCursor: true })
-    btn.on('pointerdown', () => this.resetBoard())
-    // auto-hide when reset
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { panel.destroy(); title.destroy(); btn.destroy() })
+    try { document.body.classList.add('modal-open') } catch {}
+    // Dim backdrop that captures input so clicks don't hit the board
+    const backdrop = this.add.rectangle(360, 640, 720, 1280, 0x000000, 0.45)
+      .setDepth(90)
+      .setInteractive({ useHandCursor: false })
+    // Tap anywhere on backdrop to reset
+    backdrop.on('pointerdown', () => this.resetBoard())
 
-    // no leaderboard
+    // Rounded panel via graphics for a premium look
+    const w = 520, h = 260
+    const gfx = this.add.graphics({ x: cx - w/2, y: cy - h/2 }).setDepth(100)
+    gfx.fillStyle(0x111111, 0.92)
+    gfx.fillRoundedRect(0, 0, w, h, 18)
+    gfx.lineStyle(2, 0xffffff, 0.12)
+    gfx.strokeRoundedRect(0, 0, w, h, 18)
+
+    const title = this.add.text(cx, cy - 40, 'Out of moves!', { fontFamily: 'Nunito', fontSize: '42px', color: '#ffffff' })
+      .setOrigin(0.5).setDepth(101)
+
+    // Reset button
+    const btnBg = this.add.graphics({ x: cx - 80, y: cy + 10 }).setDepth(101)
+    btnBg.fillStyle(0x2e2a7e, 1).fillRoundedRect(0, 0, 160, 46, 12)
+    btnBg.lineStyle(2, 0x5e55ea, 1).strokeRoundedRect(0, 0, 160, 46, 12)
+    const btnLabel = this.add.text(cx, cy + 33, 'Reset', { fontFamily: 'Nunito', fontSize: '24px', color: '#ffd166' })
+      .setOrigin(0.5).setDepth(102)
+    const btnHit = this.add.rectangle(cx, cy + 33, 160, 46, 0x000000, 0).setInteractive({ useHandCursor: true }).setDepth(103)
+    btnHit.on('pointerdown', () => this.resetBoard())
+
+    // Subtle scale-in
+    gfx.setScale(0.9).setAlpha(0)
+    this.tweens.add({ targets: [gfx, title, btnBg, btnLabel, btnHit], alpha: 1, duration: 180 })
+    this.tweens.add({ targets: gfx, scale: 1, duration: 220, ease: 'Back.easeOut' })
+
+    // Cleanup on scene shutdown
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      backdrop.destroy(); gfx.destroy(); title.destroy(); btnBg.destroy(); btnLabel.destroy(); btnHit.destroy()
+      try { document.body.classList.remove('modal-open') } catch {}
+    })
   }
 
   private flashLevelUp() {
@@ -935,16 +1157,23 @@ export class GameScene extends Phaser.Scene {
       const idx = (this.level - 1) % BG_URLS.length
       const key = `bg_${idx}`
       if (!this.textures.exists(key)) this.load.image(key, BG_URLS[idx])
-      const finish = () => {
-        this.bgImage!.setTexture(key)
-        const w = 720, h = 1280
-        const bw = this.bgImage!.width, bh = this.bgImage!.height
-        const scale = Math.max(w / bw, h / bh)
-        this.bgImage!.setScale(scale)
-      }
-      if (this.textures.exists(key)) finish()
-      else this.load.once(Phaser.Loader.Events.COMPLETE, finish).start()
+      // Update body background and notify UI as well
+      try {
+        const url = BG_URLS[idx]
+        if (url) {
+          document.body.style.backgroundImage = `url('${url}')`
+          document.body.style.backgroundSize = 'cover'
+          document.body.style.backgroundPosition = 'center'
+          document.body.style.backgroundRepeat = 'no-repeat'
+          document.body.style.backgroundAttachment = 'fixed'
+          window.dispatchEvent(new CustomEvent('UiBackground', { detail: { url } }))
+        }
+      } catch {}
     }
+
+    // Confetti burst and top-bar shimmer
+    this.confettiBurst()
+    try { window.dispatchEvent(new CustomEvent('UiShimmer')) } catch {}
   }
 
   // Boosters removed
@@ -985,12 +1214,14 @@ export class GameScene extends Phaser.Scene {
   private clearRow(r: number) {
     const group: GridCell[] = []
     for (let c = 0; c < GRID_SIZE; c++) group.push(this.grid[r][c])
+    this.sweepBeamRow(r)
     this.clearCellsImmediate(group, 'line_h')
     this.sounds.line?.()
   }
   private clearCol(c: number) {
     const group: GridCell[] = []
     for (let r = 0; r < GRID_SIZE; r++) group.push(this.grid[r][c])
+    this.sweepBeamCol(c)
     this.clearCellsImmediate(group, 'line_v')
     this.sounds.line?.()
   }
@@ -1001,6 +1232,7 @@ export class GameScene extends Phaser.Scene {
         group.push(this.grid[r][c])
       }
     }
+    this.shockwave(cell)
     this.clearCellsImmediate(group, 'bomb')
     this.sounds.bomb?.()
   }
@@ -1059,6 +1291,47 @@ export class GameScene extends Phaser.Scene {
       localStorage.setItem('cc_save', JSON.stringify(payload))
     } catch {}
   }
+
+  // --- UI API and helpers added ---
+  setVolume(v: number) {
+    this.volume = Phaser.Math.Clamp(v, 0, 1)
+    // adjust bgm if playing
+    try {
+      if (this.bgmGain) this.bgmGain.gain.value = this.muted ? 0 : 0.03 * this.volume
+    } catch {}
+  }
+
+  startDaily() {
+    try {
+      const today = new Date()
+      const y = today.getFullYear()
+      const m = (today.getMonth() + 1).toString().padStart(2, '0')
+      const d = today.getDate().toString().padStart(2, '0')
+      const seedStr = `${y}${m}${d}`
+      localStorage.setItem('cc_daily_on', '1')
+      localStorage.setItem('cc_daily_seed', seedStr)
+    } catch {}
+    this.resetBoard()
+  }
+
+  private updateBest() {
+    try {
+      const raw = localStorage.getItem('cc_best')
+      const best = raw ? parseInt(raw, 10) : 0
+      if (this.score > best) localStorage.setItem('cc_best', String(this.score))
+    } catch {}
+  }
+
+  private makeRng(seed: number) {
+    // mulberry32 PRNG
+    let t = seed >>> 0
+    return function() {
+      t += 0x6D2B79F5
+      let x = Math.imul(t ^ (t >>> 15), 1 | t)
+      x ^= x + Math.imul(x ^ (x >>> 7), 61 | x)
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296
+    }
+  }
   private loadState(): boolean {
     try {
       const raw = localStorage.getItem('cc_save')
@@ -1099,7 +1372,7 @@ export class GameScene extends Phaser.Scene {
       const gain = ctx.createGain()
       osc.type = 'sine'
       osc.frequency.value = freq
-      gain.gain.value = volume
+      gain.gain.value = volume * this.volume
       osc.connect(gain).connect(ctx.destination)
       osc.start()
       gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration)
@@ -1123,7 +1396,7 @@ export class GameScene extends Phaser.Scene {
       osc.connect(filter).connect(gain).connect(ctx.destination)
       osc.start()
       // Fade in pad
-      const targetGain = this.muted ? 0 : 0.03
+      const targetGain = this.muted ? 0 : 0.03 * this.volume
       gain.gain.linearRampToValueAtTime(targetGain, ctx.currentTime + 0.4)
       // Gentle 8-note loop with smooth glides
       const notes = [196, 233, 220, 262, 196, 233, 220, 294] // airy minor feel

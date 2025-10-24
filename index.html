@@ -12,13 +12,41 @@
     <div id="app"></div>
 
     <div id="ui-root" class="ui-root">
-      <div class="controls">
-        <button id="mute-btn">Mute</button>
-        <button id="reset-btn">Reset</button>
+      <div class="top-bar">
+        <div class="brand-wrap">
+          <div class="brand">Candy Mon</div>
+          <div class="brand-progress"><div class="brand-progress-bar" style="width:0%"></div></div>
+        </div>
+        <div class="stats">
+          <span id="score">Score: 0</span>
+          <span id="moves">Moves: 30</span>
+          <span id="level">Level: 1</span>
+          <span id="goal">Goal: 500</span>
+          <span id="best">Best: 0</span>
+        </div>
+        <div class="controls">
+          <label class="upload" style="gap:6px;">
+            Vol
+            <input id="volume" type="range" min="0" max="100" value="55" style="width:120px;">
+          </label>
+          <button id="daily-btn">Daily</button>
+          <button id="fx-toggle">FX: On</button>
+          <button id="mute-btn">Mute</button>
+          <button id="reset-btn">Reset</button>
+        </div>
       </div>
     </div>
 
     
+
+    <div class="footer-bar">
+      <div class="footer-center">MONAD 💜 LOVE</div>
+      <a class="x-link" href="https://x.com/arun_ketha12649" target="_blank" rel="noopener noreferrer" aria-label="X profile">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+          <path d="M18.244 2H21L14.28 10.07 22 22h-6.16l-4.82-6.99L5.44 22H2l7.21-8.62L2 2h6.2l4.34 6.3L18.244 2Zm-2.16 18h1.52L7.98 4h-1.5l9.604 16Z"/>
+        </svg>
+      </a>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>
