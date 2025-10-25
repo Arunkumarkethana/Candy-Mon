@@ -67,6 +67,7 @@ const sheetChill = document.getElementById('sheet-chill') as HTMLInputElement | 
 const sheetInstall = document.getElementById('sheet-install') as HTMLButtonElement | null
 const sheetReminder = document.getElementById('sheet-reminder') as HTMLInputElement | null
 const sheetMissions = document.getElementById('sheet-missions') as HTMLDivElement | null
+const soundTip = document.getElementById('sound-tip') as HTMLDivElement | null
 
 // Global audio state
 let muted = false
@@ -87,6 +88,17 @@ try {
   const unlock = () => { getGameScene()?.warmAudio() }
   window.addEventListener('pointerdown', unlock, { once: true })
   window.addEventListener('touchend', unlock, { once: true, passive: true } as any)
+} catch {}
+
+// Show tip on mobile until audio unlocks
+try {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1)
+  if (isIOS && soundTip) {
+    soundTip.classList.add('show')
+    const hide = () => soundTip.classList.remove('show')
+    window.addEventListener('AudioUnlocked', hide, { once: true } as any)
+    window.addEventListener('pointerdown', hide, { once: true })
+  }
 } catch {}
 
 // Initialize color-blind from persistence

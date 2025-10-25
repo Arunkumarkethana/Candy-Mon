@@ -168,6 +168,7 @@ export class GameScene extends Phaser.Scene {
       if (!this.muted && !this.bgmTimer) {
         this.startBgm()
       }
+      try { window.dispatchEvent(new CustomEvent('AudioUnlocked')) } catch {}
     } catch {}
   }
   // Smooth frequency sweep tone for line clears etc.
