@@ -53,33 +53,33 @@ export class GameScene extends Phaser.Scene {
       blendMode: 'ADD'
     })
 
-    // --- Debug toggle button ('?') ---
-    try {
-      const btn = this.add.rectangle(700, 60, 24, 24, 0x000000, 0.35).setDepth(40)
-        .setStrokeStyle(1, 0xffffff, 0.5)
-        .setInteractive({ useHandCursor: true })
-      const txt = this.add.text(700, 60, '?', { fontFamily: 'Nunito', fontSize: '16px', color: '#ffffff' }).setOrigin(0.5).setDepth(41)
-      btn.on('pointerdown', () => { this.debugMatches = !this.debugMatches; this.clearMatchDebug() })
-    } catch {}
-
-    // Debug: Force Match (creates a 3-in-a-row at row 3, cols 2..4)
-    try {
-      const btn = this.add.rectangle(640, 100, 84, 24, 0x2a2a2a, 0.6).setDepth(40)
-        .setStrokeStyle(1, 0xffffff, 0.35).setInteractive({ useHandCursor: true })
-      this.add.text(640, 100, 'Force', { fontFamily: 'Nunito', fontSize: '14px', color: '#ffd166' })
-        .setOrigin(0.5).setDepth(41)
-      btn.on('pointerdown', () => this.forceMatchDemo())
-    } catch {}
-
-    // Debug: Validate Board
-    try {
-      const btn = this.add.rectangle(720, 100, 84, 24, 0x2a2a2a, 0.6).setDepth(40)
-        .setStrokeStyle(1, 0xffffff, 0.35).setInteractive({ useHandCursor: true })
-      this.add.text(720, 100, 'Validate', { fontFamily: 'Nunito', fontSize: '14px', color: '#90ee90' })
-        .setOrigin(0.5).setDepth(41)
-      btn.on('pointerdown', () => this.showValidation())
-      this.debugLabel = this.add.text(360, 40, '', { fontFamily: 'Nunito', fontSize: '16px', color: '#ffffff' }).setDepth(42).setOrigin(0.5)
-    } catch {}
+    if (this.debugMode) {
+      // --- Debug toggle button ('?') ---
+      try {
+        const btn = this.add.rectangle(700, 60, 24, 24, 0x000000, 0.35).setDepth(40)
+          .setStrokeStyle(1, 0xffffff, 0.5)
+          .setInteractive({ useHandCursor: true })
+        const txt = this.add.text(700, 60, '?', { fontFamily: 'Nunito', fontSize: '16px', color: '#ffffff' }).setOrigin(0.5).setDepth(41)
+        btn.on('pointerdown', () => { this.debugMatches = !this.debugMatches; this.clearMatchDebug() })
+      } catch {}
+      // Debug: Force Match (creates a 3-in-a-row at row 3, cols 2..4)
+      try {
+        const btn = this.add.rectangle(640, 100, 84, 24, 0x2a2a2a, 0.6).setDepth(40)
+          .setStrokeStyle(1, 0xffffff, 0.35).setInteractive({ useHandCursor: true })
+        this.add.text(640, 100, 'Force', { fontFamily: 'Nunito', fontSize: '14px', color: '#ffd166' })
+          .setOrigin(0.5).setDepth(41)
+        btn.on('pointerdown', () => this.forceMatchDemo())
+      } catch {}
+      // Debug: Validate Board
+      try {
+        const btn = this.add.rectangle(720, 100, 84, 24, 0x2a2a2a, 0.6).setDepth(40)
+          .setStrokeStyle(1, 0xffffff, 0.35).setInteractive({ useHandCursor: true })
+        this.add.text(720, 100, 'Validate', { fontFamily: 'Nunito', fontSize: '14px', color: '#90ee90' })
+          .setOrigin(0.5).setDepth(41)
+        btn.on('pointerdown', () => this.showValidation())
+        this.debugLabel = this.add.text(360, 40, '', { fontFamily: 'Nunito', fontSize: '16px', color: '#ffffff' }).setDepth(42).setOrigin(0.5)
+      } catch {}
+    }
     return e
   }
 
@@ -107,7 +107,7 @@ export class GameScene extends Phaser.Scene {
       this.maskGfxRef.fillStyle(0xffffff, 1)
       this.maskGfxRef.fillRect(GRID_LEFT, this.gridTop(), GRID_SIZE * CELL_PX, GRID_SIZE * CELL_PX)
       this.boardMask = this.maskGfxRef.createGeometryMask()
-      // Re-apply new mask to existing sprites
+      this.maskGfxRef.setVisible(false)
       for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
           const cell = this.grid?.[r]?.[c]
@@ -324,7 +324,7 @@ export class GameScene extends Phaser.Scene {
   private comboBar?: Phaser.GameObjects.Graphics
   private comboDecay?: Phaser.Time.TimerEvent
   // Debug: match highlighter
-  private debugMatches = false
+  private debugMatches = true
   private debugGfx: Phaser.GameObjects.Graphics[] = []
   private debugMode = true
   private debugLabel?: Phaser.GameObjects.Text
@@ -591,7 +591,7 @@ export class GameScene extends Phaser.Scene {
       if (!this.selected || this.isSwapping || !this.dragStart) return
       const dx = pointer.worldX - this.dragStart.x
       const dy = pointer.worldY - this.dragStart.y
-      const threshold = 22
+      const threshold = 10
       if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return
       
       let target: GridCell | undefined
@@ -612,13 +612,11 @@ export class GameScene extends Phaser.Scene {
       }
       
       if (target && target.sprite) {
-        this.isSwapping = true
         const from = this.selected
         this.highlight(from, false)
         this.selected = undefined
         this.trySwap(from, target)
         this.dragStart = undefined
-        this.time.delayedCall(200, () => { this.isSwapping = false })
       }
     })
     this.input.on('pointerup', () => { this.dragStart = undefined })
@@ -640,6 +638,8 @@ export class GameScene extends Phaser.Scene {
     this.updateUi()
 
     this.resetIdleTimer()
+    // Clear swap state on pointer up just in case
+    this.input.on('pointerup', () => { this.isSwapping = false; this.dragStart = undefined })
 
     // Auto FX off on low FPS devices
     this.time.delayedCall(3200, () => {
@@ -918,8 +918,12 @@ export class GameScene extends Phaser.Scene {
 
   private trySwap(a: GridCell, b: GridCell) {
     if (!a.sprite || !b.sprite) return
+    if (this.isSwapping) return
+    this.isSwapping = true
     this.sounds.swap()
     this.swapCells(a, b)
+    // Fail-safe unlock in case a tween is interrupted
+    const unlock = this.time.delayedCall(1200, () => { this.isSwapping = false })
     this.animateSwap(a, b, async () => {
       const matches = this.findAllMatches()
       if (matches.length === 0) {
@@ -928,6 +932,7 @@ export class GameScene extends Phaser.Scene {
         this.animateSwap(a, b, () => {
           if (a.sprite) this.shake(a.sprite)
           if (b.sprite) this.shake(b.sprite)
+          this.isSwapping = false; unlock.remove(false)
         })
         return
       }
@@ -936,6 +941,7 @@ export class GameScene extends Phaser.Scene {
       await this.resolveMatchesLoop()
       if (!this.chillMode && this.movesLeft <= 0) this.showGameOver()
       else if (!this.hasAnyMoves()) this.shuffleBoard()
+      this.isSwapping = false; unlock.remove(false)
     })
   }
 
@@ -1059,7 +1065,7 @@ export class GameScene extends Phaser.Scene {
     while (true) {
       this.ensureGridIndices()
       const matches = this.findAllMatches()
-      if (this.debugMatches) this.renderMatchDebug(matches)
+      if (this.debugMode && this.debugMatches) this.renderMatchDebug(matches)
       if (!matches.length) break
       await this.clearMatches(matches, combo)
       await this.dropAndRefill()
@@ -1262,10 +1268,10 @@ export class GameScene extends Phaser.Scene {
       try { window.dispatchEvent(new CustomEvent('UiShimmer')) } catch {}
       this.camZoomPulse()
       this.confettiBurst()
-      // Uplifting triad
-      this.playTone(523, 0.12, 0.35)
-      this.time.delayedCall(80, () => this.playTone(659, 0.12, 0.35))
-      this.time.delayedCall(160, () => this.playTone(784, 0.18, 0.40))
+      // Uplifting triad (louder + shorter)
+      this.playTone(523, 0.10, 0.50)
+      this.time.delayedCall(70, () => this.playTone(659, 0.10, 0.50))
+      this.time.delayedCall(140, () => this.playTone(784, 0.14, 0.55))
       this.level += 1
       this.goal = Math.floor(this.goal * 1.7)
       this.movesLeft += 10
@@ -1289,7 +1295,7 @@ export class GameScene extends Phaser.Scene {
               this.grid[r][c].sprite = above.sprite
               if (above.sprite) {
                 const to = this.cellCenter({ row: r, col: c, kind: above.kind })
-                this.tweens.add({ targets: above.sprite, x: to.x, y: to.y, duration: 180, ease: 'Cubic.easeIn',
+                this.tweens.add({ targets: above.sprite, x: to.x, y: to.y, duration: 150, ease: 'Cubic.easeIn',
                   onComplete: () => {
                     if (above.sprite) this.tweens.add({ targets: above.sprite, scale: 0.96, yoyo: true, duration: 80 })
                   }
@@ -1316,15 +1322,15 @@ export class GameScene extends Phaser.Scene {
           const sprite = this.add.sprite(pos.x, pos.y - CELL_PX * 1.5, key)
           sprite.setScale(0.8)
           sprite.setAlpha(0.85)
-          sprite.setInteractive(new Phaser.Geom.Circle(0, 0, CELL_PX * 0.55), Phaser.Geom.Circle.Contains)
+          sprite.setInteractive(new Phaser.Geom.Circle(0, 0, CELL_PX * 0.65), Phaser.Geom.Circle.Contains)
           if (this.boardMask) sprite.setMask(this.boardMask)
           cell.sprite = sprite
           this.applyTintForKind(sprite, cell.kind)
-          this.tweens.add({ targets: sprite, y: pos.y, scale: 0.95, alpha: 1, duration: 220, ease: 'Back.easeOut' })
+          this.tweens.add({ targets: sprite, y: pos.y, scale: 0.95, alpha: 1, duration: 190, ease: 'Back.easeOut' })
         }
       }
     }
-    await this.wait(200)
+    await this.wait(160)
     // Safety pass: ensure every filled cell has a sprite at the exact cell center
     for (let r = 0; r < GRID_SIZE; r++) {
       for (let c = 0; c < GRID_SIZE; c++) {
@@ -1334,13 +1340,15 @@ export class GameScene extends Phaser.Scene {
         if (!cell.sprite || !cell.sprite.scene) {
           const key = this.textureForKind(cell.kind)
           const sp = this.add.sprite(pos.x, pos.y, key).setScale(0.95)
-          sp.setInteractive(new Phaser.Geom.Circle(0, 0, CELL_PX * 0.55), Phaser.Geom.Circle.Contains)
+          sp.setInteractive(new Phaser.Geom.Circle(0, 0, CELL_PX * 0.65), Phaser.Geom.Circle.Contains)
           if (this.boardMask) sp.setMask(this.boardMask)
           this.applyTintForKind(sp, cell.kind)
           cell.sprite = sp
         } else {
           // Clamp any drift
           cell.sprite.setPosition(pos.x, pos.y)
+          // Ensure stays interactive
+          cell.sprite.setInteractive(new Phaser.Geom.Circle(0, 0, CELL_PX * 0.65), Phaser.Geom.Circle.Contains)
         }
       }
     }
