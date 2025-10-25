@@ -1024,6 +1024,7 @@ export class GameScene extends Phaser.Scene {
   private async resolveMatchesLoop() {
     let combo = 1
     while (true) {
+      this.ensureGridIndices()
       const matches = this.findAllMatches()
       if (!matches.length) break
       await this.clearMatches(matches, combo)
@@ -1277,6 +1278,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
+    this.ensureGridIndices()
   }
 
   private hasAnyMoves(): boolean {
@@ -1319,7 +1321,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.hasAnyMoves()) this.shuffleBoard()
     const flash = this.add.rectangle(360, 640, 720, 1280, 0xffffff, 0.0).setDepth(20)
     this.tweens.add({ targets: flash, alpha: 0.18, duration: 80, yoyo: true, onComplete: () => flash.destroy() })
-    this.saveState()
+    this.ensureGridIndices(); this.saveState()
   }
 
   private resetIdleTimer() {
@@ -1358,6 +1360,16 @@ export class GameScene extends Phaser.Scene {
     if (this.hintSprites.length) this.tweens.killTweensOf(this.hintSprites)
     this.hintSprites.forEach(s => s.setScale(0.9))
     this.hintSprites = []
+  }
+
+  private ensureGridIndices() {
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const cell = this.grid[r][c]
+        cell.row = r
+        cell.col = c
+      }
+    }
   }
 
   private showGameOver() {
