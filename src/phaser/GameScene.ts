@@ -52,6 +52,15 @@ export class GameScene extends Phaser.Scene {
       on: false,
       blendMode: 'ADD'
     })
+
+    // --- Debug toggle button ('?') ---
+    try {
+      const btn = this.add.rectangle(700, 60, 24, 24, 0x000000, 0.35).setDepth(40)
+        .setStrokeStyle(1, 0xffffff, 0.5)
+        .setInteractive({ useHandCursor: true })
+      const txt = this.add.text(700, 60, '?', { fontFamily: 'Nunito', fontSize: '16px', color: '#ffffff' }).setOrigin(0.5).setDepth(41)
+      btn.on('pointerdown', () => { this.debugMatches = !this.debugMatches; this.clearMatchDebug() })
+    } catch {}
     return e
   }
 
@@ -295,6 +304,9 @@ export class GameScene extends Phaser.Scene {
   private fever = false
   private comboBar?: Phaser.GameObjects.Graphics
   private comboDecay?: Phaser.Time.TimerEvent
+  // Debug: match highlighter
+  private debugMatches = false
+  private debugGfx: Phaser.GameObjects.Graphics[] = []
   // Accessibility
   private colorBlind = false
   // Missions
@@ -1026,6 +1038,7 @@ export class GameScene extends Phaser.Scene {
     while (true) {
       this.ensureGridIndices()
       const matches = this.findAllMatches()
+      if (this.debugMatches) this.renderMatchDebug(matches)
       if (!matches.length) break
       await this.clearMatches(matches, combo)
       await this.dropAndRefill()
@@ -1384,6 +1397,25 @@ export class GameScene extends Phaser.Scene {
         cell.row = r
         cell.col = c
       }
+    }
+  }
+
+  private clearMatchDebug() {
+    try { this.debugGfx.forEach(g => g.destroy()) } catch {}
+    this.debugGfx = []
+  }
+  private renderMatchDebug(groups: GridCell[][]) {
+    this.clearMatchDebug()
+    for (const g of groups) {
+      const gfx = this.add.graphics().setDepth(35)
+      gfx.lineStyle(2, 0xffd166, 0.9)
+      for (const cell of g) {
+        const x = GRID_LEFT + cell.col * CELL_PX
+        const y = this.gridTop() + cell.row * CELL_PX
+        gfx.strokeRect(x + 4, y + 4, CELL_PX - 8, CELL_PX - 8)
+      }
+      if (this.boardMask) gfx.setMask(this.boardMask)
+      this.debugGfx.push(gfx)
     }
   }
 
