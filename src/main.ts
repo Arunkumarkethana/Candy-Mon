@@ -68,6 +68,8 @@ const sheetInstall = document.getElementById('sheet-install') as HTMLButtonEleme
 const sheetReminder = document.getElementById('sheet-reminder') as HTMLInputElement | null
 const sheetMissions = document.getElementById('sheet-missions') as HTMLDivElement | null
 const soundTip = document.getElementById('sound-tip') as HTMLDivElement | null
+const onboard = document.getElementById('onboard') as HTMLDivElement | null
+const onboardOk = document.getElementById('onboard-ok') as HTMLButtonElement | null
 
 // Global audio state
 let muted = false
@@ -81,6 +83,17 @@ try {
   const dockLabel = dockMute?.querySelector('span')
   if (dockLabel) dockLabel.textContent = muted ? 'Unmute' : 'Mute'
   if (sheetMute) sheetMute.textContent = muted ? 'Unmute' : 'Mute'
+} catch {}
+
+// Onboarding overlay: show once per device
+try {
+  const seen = localStorage.getItem('cc_onboard_seen') === '1'
+  if (!seen && onboard) {
+    onboard.classList.add('show')
+    onboardOk?.addEventListener('click', () => { onboard.classList.remove('show'); localStorage.setItem('cc_onboard_seen','1') })
+    window.addEventListener('FirstSwap', () => { onboard.classList.remove('show'); localStorage.setItem('cc_onboard_seen','1') }, { once: true })
+    // Arrow defaults to center; optional smart positioning can be added later
+  }
 } catch {}
 
 // iOS audio unlock on first user gesture
