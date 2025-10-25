@@ -1258,9 +1258,14 @@ export class GameScene extends Phaser.Scene {
     this.updateUi()
     this.updateBest()
     if (this.score >= this.goal) {
-      // Goal reached celebration: UI shimmer + quick camera zoom pulse
+      // Goal reached celebration: UI shimmer + quick camera zoom pulse + confetti + tones
       try { window.dispatchEvent(new CustomEvent('UiShimmer')) } catch {}
       this.camZoomPulse()
+      this.confettiBurst()
+      // Uplifting triad
+      this.playTone(523, 0.12, 0.35)
+      this.time.delayedCall(80, () => this.playTone(659, 0.12, 0.35))
+      this.time.delayedCall(160, () => this.playTone(784, 0.18, 0.40))
       this.level += 1
       this.goal = Math.floor(this.goal * 1.7)
       this.movesLeft += 10

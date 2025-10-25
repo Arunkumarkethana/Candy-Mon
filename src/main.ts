@@ -43,6 +43,9 @@ const dailyBtn = document.getElementById('daily-btn') as HTMLButtonElement | nul
 const bestEl = document.getElementById('best') as HTMLSpanElement | null
 const barToggle = document.getElementById('bar-toggle') as HTMLButtonElement | null
 const uiRoot = document.getElementById('ui-root') as HTMLDivElement | null
+const nextGoalEl = document.getElementById('next-goal') as HTMLDivElement | null
+const levelBadge = document.getElementById('level-badge') as HTMLDivElement | null
+const levelBadgeText = document.getElementById('level-badge-text') as HTMLSpanElement | null
 // Bottom dock elements
 const dockDaily = document.getElementById('dock-daily') as HTMLButtonElement | null
 const dockFx = document.getElementById('dock-fx') as HTMLButtonElement | null
@@ -195,6 +198,8 @@ window.addEventListener('GameScore', (ev: any) => {
   }
   if (miniScore) miniScore.textContent = String(score)
   updateBrandProgress(score)
+  updateNextGoal()
+  updateLevelBadge()
   // Update best from localStorage if improved by scene
   try {
     const raw = localStorage.getItem('cc_best')
@@ -219,6 +224,9 @@ window.addEventListener('GameLevel', (ev: any) => {
   const scoreText = scoreEl?.textContent?.match(/\d+/)?.[0]
   const currentScore = scoreText ? parseInt(scoreText, 10) : 0
   updateBrandProgress(currentScore, ev.detail.goal)
+  updateNextGoal()
+  if (levelBadgeText) levelBadgeText.textContent = String(ev.detail.level)
+  updateLevelBadge()
 })
 
 function pulse(el: Element) {
@@ -239,6 +247,28 @@ function updateBrandProgress(score: number, goal?: number) {
     if (pct >= 0.8) goalEl.classList.add('goal-hot')
     else goalEl.classList.remove('goal-hot')
   }
+}
+
+function updateNextGoal() {
+  if (!nextGoalEl) return
+  const scoreText = scoreEl?.textContent?.match(/\d+/)?.[0]
+  const goalText = goalEl?.textContent?.match(/\d+/)?.[0]
+  const s = scoreText ? parseInt(scoreText, 10) : 0
+  const g = goalText ? parseInt(goalText, 10) : 0
+  if (!g) { nextGoalEl.textContent = ''; return }
+  const remain = Math.max(0, g - s)
+  nextGoalEl.textContent = remain > 0 ? `Next goal: ${remain} pts` : 'Goal reached!'
+}
+
+function updateLevelBadge() {
+  if (!levelBadge) return
+  const scoreText = scoreEl?.textContent?.match(/\d+/)?.[0]
+  const goalText = goalEl?.textContent?.match(/\d+/)?.[0]
+  const s = scoreText ? parseInt(scoreText, 10) : 0
+  const g = goalText ? parseInt(goalText, 10) : 0
+  if (!g) { levelBadge.style.setProperty('--lv-pct', '0%'); return }
+  const pct = Math.max(0, Math.min(1, s / g))
+  levelBadge.style.setProperty('--lv-pct', `${Math.floor(pct * 100)}%`)
 }
 
 //
