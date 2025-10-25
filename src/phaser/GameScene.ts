@@ -61,6 +61,25 @@ export class GameScene extends Phaser.Scene {
       const txt = this.add.text(700, 60, '?', { fontFamily: 'Nunito', fontSize: '16px', color: '#ffffff' }).setOrigin(0.5).setDepth(41)
       btn.on('pointerdown', () => { this.debugMatches = !this.debugMatches; this.clearMatchDebug() })
     } catch {}
+
+    // Debug: Force Match (creates a 3-in-a-row at row 3, cols 2..4)
+    try {
+      const btn = this.add.rectangle(640, 100, 84, 24, 0x2a2a2a, 0.6).setDepth(40)
+        .setStrokeStyle(1, 0xffffff, 0.35).setInteractive({ useHandCursor: true })
+      this.add.text(640, 100, 'Force', { fontFamily: 'Nunito', fontSize: '14px', color: '#ffd166' })
+        .setOrigin(0.5).setDepth(41)
+      btn.on('pointerdown', () => this.forceMatchDemo())
+    } catch {}
+
+    // Debug: Validate Board
+    try {
+      const btn = this.add.rectangle(720, 100, 84, 24, 0x2a2a2a, 0.6).setDepth(40)
+        .setStrokeStyle(1, 0xffffff, 0.35).setInteractive({ useHandCursor: true })
+      this.add.text(720, 100, 'Validate', { fontFamily: 'Nunito', fontSize: '14px', color: '#90ee90' })
+        .setOrigin(0.5).setDepth(41)
+      btn.on('pointerdown', () => this.showValidation())
+      this.debugLabel = this.add.text(360, 40, '', { fontFamily: 'Nunito', fontSize: '16px', color: '#ffffff' }).setDepth(42).setOrigin(0.5)
+    } catch {}
     return e
   }
 
@@ -307,6 +326,8 @@ export class GameScene extends Phaser.Scene {
   // Debug: match highlighter
   private debugMatches = false
   private debugGfx: Phaser.GameObjects.Graphics[] = []
+  private debugMode = true
+  private debugLabel?: Phaser.GameObjects.Text
   // Accessibility
   private colorBlind = false
   // Missions
@@ -1042,6 +1063,8 @@ export class GameScene extends Phaser.Scene {
       if (!matches.length) break
       await this.clearMatches(matches, combo)
       await this.dropAndRefill()
+      // Validate after each settle in debug mode
+      if (this.debugMode) this.showValidation()
       if (combo >= 2) this.comboPopup(combo)
       if (combo === 2) this.missionComboTwo()
       combo += 1
@@ -1050,6 +1073,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private findAllMatches(): GridCell[][] {
+    this.clearAllSpecialFlags()
     const visited = new Set<string>()
     const groups: GridCell[][] = []
     const mark = (r: number, c: number) => `${r},${c}`
@@ -1129,6 +1153,15 @@ export class GameScene extends Phaser.Scene {
     return result
   }
 
+  private clearAllSpecialFlags() {
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const cell = this.grid[r][c]
+        if (cell && (cell as any).special) cell.special = undefined
+      }
+    }
+  }
+
   private detectTandLShapes() {
     for (let r = 1; r < GRID_SIZE - 1; r++) {
       for (let c = 1; c < GRID_SIZE - 1; c++) {
@@ -1187,8 +1220,8 @@ export class GameScene extends Phaser.Scene {
       for (const cell of group) {
         if (!cell.sprite) continue
         
-        // Enhanced particle effects (pooled emitter)
-        this.explodeSpark(cell.sprite.x, cell.sprite.y)
+        // Enhanced particle effects (pooled emitter) - dampened in debug
+        if (!this.debugMode) this.explodeSpark(cell.sprite.x, cell.sprite.y)
         
         // Enhanced pop animation with easing
         const sprite = cell.sprite
@@ -1417,6 +1450,64 @@ export class GameScene extends Phaser.Scene {
       if (this.boardMask) gfx.setMask(this.boardMask)
       this.debugGfx.push(gfx)
     }
+  }
+
+  // Debug helpers
+  private showValidation() {
+    const issues = this.validateBoard()
+    const msg = issues.length ? `Board issues: ${issues.length}` : 'Board OK'
+    if (this.debugLabel) this.debugLabel.setText(msg)
+    else console.log(msg, issues)
+  }
+
+  private validateBoard(): string[] {
+    const errs: string[] = []
+    // grid coherence
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const cell = this.grid[r][c]
+        if (cell.row !== r || cell.col !== c) errs.push(`idx mismatch at ${r},${c}`)
+        if (cell.kind === -1) {
+          if (cell.sprite) errs.push(`sprite present but kind=-1 at ${r},${c}`)
+        } else {
+          if (!cell.sprite) errs.push(`missing sprite at ${r},${c}`)
+          else {
+            const pos = this.cellCenter(cell)
+            if (Math.abs((cell.sprite.x ?? 0) - pos.x) > 0.5 || Math.abs((cell.sprite.y ?? 0) - pos.y) > 0.5) {
+              errs.push(`sprite off-center at ${r},${c}`)
+            }
+          }
+        }
+      }
+    }
+    // stray sprites off-grid
+    // (lightweight check by sampling the display list under mask area)
+    return errs
+  }
+
+  private forceMatchDemo() {
+    const r = 3
+    const cols = [2,3,4]
+    const k = 0
+    for (const c of cols) {
+      const cell = this.grid[r][c]
+      cell.kind = k
+      if (cell.sprite) {
+        const key = this.textureForKind(k)
+        cell.sprite.setTexture(key)
+        cell.sprite.setPosition(this.cellCenter(cell).x, this.cellCenter(cell).y)
+      } else {
+        const pos = this.cellCenter(cell)
+        const key = this.textureForKind(k)
+        const sp = this.add.sprite(pos.x, pos.y, key).setScale(0.95)
+        sp.setInteractive(new Phaser.Geom.Circle(0, 0, CELL_PX * 0.55), Phaser.Geom.Circle.Contains)
+        if (this.boardMask) sp.setMask(this.boardMask)
+        this.applyTintForKind(sp, k)
+        cell.sprite = sp
+      }
+    }
+    this.ensureGridIndices()
+    if (this.debugMatches) this.renderMatchDebug(this.findAllMatches())
   }
 
   private showGameOver() {
