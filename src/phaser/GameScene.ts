@@ -1647,7 +1647,8 @@ export class GameScene extends Phaser.Scene {
   private startBgm() {
     try {
       const audioManager = this.sound as any
-      const ctx = audioManager.context || audioManager.audioContext || (window as any).AudioContext && new (window as any).AudioContext()
+      const ctx = audioManager?.context || audioManager?.audioContext
+      if (!ctx || ctx.state === 'suspended') return
       this.bgmOsc?.stop(); this.bgmGain?.disconnect(); this.bgmTimer?.remove()
       // Airy pad: triangle wave through a gentle lowpass with slow attack
       const osc = ctx.createOscillator()

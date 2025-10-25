@@ -98,6 +98,7 @@ try {
     const hide = () => soundTip.classList.remove('show')
     window.addEventListener('AudioUnlocked', hide, { once: true } as any)
     window.addEventListener('pointerdown', hide, { once: true })
+    soundTip.addEventListener('click', () => { getGameScene()?.warmAudio() })
   }
 } catch {}
 
