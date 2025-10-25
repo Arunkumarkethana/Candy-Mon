@@ -1046,17 +1046,24 @@ export class GameScene extends Phaser.Scene {
       let run: GridCell[] = []
       for (let c = 0; c < GRID_SIZE; c++) {
         const cell = this.grid[r][c]
+        if (cell.kind === -1) {
+          if (run.length >= 3 && run[0].kind !== -1) {
+            groups.push(run)
+            if (run.length >= 4) run.forEach(c => c.special = 'line_h')
+          }
+          run = []
+          continue
+        }
         if (!run.length || cell.kind === run[run.length - 1].kind) run.push(cell)
         else {
-          if (run.length >= 3) {
+          if (run.length >= 3 && run[0].kind !== -1) {
             groups.push(run)
-            // mark 4+ as line clear
             if (run.length >= 4) run.forEach(c => c.special = 'line_h')
           }
           run = [cell]
         }
       }
-      if (run.length >= 3) {
+      if (run.length >= 3 && run[0].kind !== -1) {
         groups.push(run)
         if (run.length >= 4) run.forEach(c => c.special = 'line_h')
       }
@@ -1067,16 +1074,24 @@ export class GameScene extends Phaser.Scene {
       let run: GridCell[] = []
       for (let r = 0; r < GRID_SIZE; r++) {
         const cell = this.grid[r][c]
+        if (cell.kind === -1) {
+          if (run.length >= 3 && run[0].kind !== -1) {
+            groups.push(run)
+            if (run.length >= 4) run.forEach(c => c.special = 'line_v')
+          }
+          run = []
+          continue
+        }
         if (!run.length || cell.kind === run[run.length - 1].kind) run.push(cell)
         else {
-          if (run.length >= 3) {
+          if (run.length >= 3 && run[0].kind !== -1) {
             groups.push(run)
             if (run.length >= 4) run.forEach(c => c.special = 'line_v')
           }
           run = [cell]
         }
       }
-      if (run.length >= 3) {
+      if (run.length >= 3 && run[0].kind !== -1) {
         groups.push(run)
         if (run.length >= 4) run.forEach(c => c.special = 'line_v')
       }
