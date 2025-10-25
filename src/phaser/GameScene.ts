@@ -1217,6 +1217,25 @@ export class GameScene extends Phaser.Scene {
       }
     }
     await this.wait(200)
+    // Safety pass: ensure every filled cell has a sprite at the exact cell center
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const cell = this.grid[r][c]
+        if (cell.kind === -1) continue
+        const pos = this.cellCenter(cell)
+        if (!cell.sprite || !cell.sprite.scene) {
+          const key = this.textureForKind(cell.kind)
+          const sp = this.add.sprite(pos.x, pos.y, key).setScale(0.95)
+          sp.setInteractive(new Phaser.Geom.Circle(0, 0, CELL_PX * 0.55), Phaser.Geom.Circle.Contains)
+          if (this.boardMask) sp.setMask(this.boardMask)
+          this.applyTintForKind(sp, cell.kind)
+          cell.sprite = sp
+        } else {
+          // Clamp any drift
+          cell.sprite.setPosition(pos.x, pos.y)
+        }
+      }
+    }
   }
 
   private hasAnyMoves(): boolean {

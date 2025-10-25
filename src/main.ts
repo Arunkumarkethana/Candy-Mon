@@ -98,7 +98,16 @@ try {
     const hide = () => soundTip.classList.remove('show')
     window.addEventListener('AudioUnlocked', hide, { once: true } as any)
     window.addEventListener('pointerdown', hide, { once: true })
-    soundTip.addEventListener('click', () => { getGameScene()?.warmAudio() })
+    soundTip.addEventListener('click', async () => {
+      try {
+        // Very short silent MP3 (approx 0.1s) to unlock iOS audio
+        const src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+        const a = new Audio(src)
+        a.play().catch(() => {})
+        setTimeout(() => { try { a.pause(); a.src = '' } catch {} }, 200)
+      } catch {}
+      getGameScene()?.warmAudio()
+    })
   }
 } catch {}
 
