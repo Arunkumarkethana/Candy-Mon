@@ -150,12 +150,12 @@ body.modal-open .footer-bar { display: none; }
   #bar-toggle { display: inline-flex; align-items: center; justify-content: center; }
   .ui-root { padding-top: calc(env(safe-area-inset-top, 0px) + 8px); }
   .footer-bar { display: none; }
-}
-
-/* Persistent top offset for board on mobile; larger when HUD open */
-@media (max-width: 720px) {
   #app { transform: translateY(70px); transition: transform 180ms ease; }
   body.hud-open #app { transform: translateY(120px); }
+  /* Respect iOS safe area so top elements are tappable */
+  .top-bar { margin-top: calc(env(safe-area-inset-top, 0px) + 4px); position: relative; z-index: 30; }
+  #bar-toggle { position: fixed; right: 12px; top: calc(env(safe-area-inset-top, 0px) + 8px); z-index: 60; }
+  .mini-strip { top: calc(env(safe-area-inset-top, 0px) + 8px); }
 }
 
 .brand {
