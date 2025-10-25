@@ -40,6 +40,29 @@ export class GameScene extends Phaser.Scene {
     bomb?: () => void
   }
 
+  private getEmitter(): Phaser.GameObjects.Particles.ParticleEmitter | undefined {
+    if (!this.sparkMgr) return undefined
+    const e = this.emitterPool.pop() || this.sparkMgr.createEmitter({
+      speed: 120,
+      lifespan: 600,
+      quantity: 0,
+      scale: { start: 1.0, end: 0 },
+      angle: { min: 0, max: 360 },
+      alpha: { start: 1, end: 0 },
+      on: false,
+      blendMode: 'ADD'
+    })
+    return e
+  }
+
+  private explodeSpark(x: number, y: number) {
+    const e = this.getEmitter()
+    if (!e) return
+    const qty = this.reducedFx ? 8 : 16
+    e.explode(qty, x, y)
+    this.time.delayedCall(800, () => { try { e.stop(); this.emitterPool.push(e) } catch {} })
+  }
+
   private gridTop() { return GRID_TOP + this.gridYOffset }
   private recomputeBoardTop() {
     // Only adjust on wider screens (desktop). Mobile layout uses CSS transforms already.
@@ -175,9 +198,11 @@ export class GameScene extends Phaser.Scene {
   private playToneSweep(start: number, end: number, duration = 0.20, volume = 0.35) {
     try {
       if (this.muted) return
+      if (this.toneActive >= 3) return
       const audioManager = this.sound as any
       const ctx = audioManager?.context || audioManager?.audioContext
       if (!ctx) return
+      this.toneActive++
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
       osc.type = 'sine'
@@ -190,16 +215,20 @@ export class GameScene extends Phaser.Scene {
       osc.connect(gain).connect(ctx.destination)
       osc.start()
       gain.gain.exponentialRampToValueAtTime(0.0001, t + duration)
-      osc.stop(t + duration + 0.02)
+      const stopAt = t + duration + 0.02
+      osc.stop(stopAt)
+      setTimeout(() => { this.toneActive = Math.max(0, this.toneActive - 1) }, duration * 1000 + 80)
     } catch {}
   }
   // Short noise burst for impact (bomb/line)
   private playNoiseBurst(duration = 0.10, volume = 0.25) {
     try {
       if (this.muted) return
+      if (this.toneActive >= 3) return
       const audioManager = this.sound as any
       const ctx = audioManager?.context || audioManager?.audioContext
       if (!ctx) return
+      this.toneActive++
       const bufferSize = 2 * ctx.sampleRate * duration
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
       const data = buffer.getChannelData(0)
@@ -211,6 +240,7 @@ export class GameScene extends Phaser.Scene {
       noise.connect(filter).connect(gain).connect(ctx.destination)
       noise.start()
       gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration)
+      setTimeout(() => { this.toneActive = Math.max(0, this.toneActive - 1) }, duration * 1000 + 80)
     } catch {}
   }
 
@@ -250,6 +280,11 @@ export class GameScene extends Phaser.Scene {
   private bgmGain?: GainNode
   private bgmOsc?: OscillatorNode
   private bgmTimer?: Phaser.Time.TimerEvent
+  // FX and performance helpers
+  private sparkMgr?: any
+  private emitterPool: any[] = []
+  private toneActive = 0
+  private fpsMonitor?: Phaser.Time.TimerEvent
   private dragStart?: { x: number, y: number }
   private isSwapping = false
   private reducedFx = false
@@ -363,6 +398,7 @@ export class GameScene extends Phaser.Scene {
     document.addEventListener('visibilitychange', onVis)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       try { document.removeEventListener('visibilitychange', onVis) } catch {}
+      try { this.fpsMonitor?.remove() } catch {}
     })
     // Background photo (cover)
     // Background photo (rotates by level if multiple are available)
@@ -456,6 +492,21 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.createBoard()
     }
+
+    // Particle manager for sparkle effects (pooled emitters)
+    try {
+      this.sparkMgr = this.add.particles(0, 0, 'spark', {})
+      this.sparkMgr.setDepth(12)
+      if (this.boardMask) this.sparkMgr.setMask(this.boardMask)
+    } catch {}
+
+    // FPS-aware reduced effects with hysteresis
+    this.fpsMonitor?.remove()
+    this.fpsMonitor = this.time.addEvent({ delay: 1500, loop: true, callback: () => {
+      const fps = this.game?.loop?.actualFps || 60
+      if (fps < 50 && !this.reducedFx) this.setReducedEffects(true)
+      else if (fps > 56 && this.reducedFx) this.setReducedEffects(false)
+    }})
 
     // Initialize missions for this session
     this.initMissions()
@@ -1107,18 +1158,8 @@ export class GameScene extends Phaser.Scene {
       for (const cell of group) {
         if (!cell.sprite) continue
         
-        // Enhanced particle effects
-        const emitter = this.add.particles(0, 0, 'spark', {
-          speed: 120,
-          lifespan: 600,
-          quantity: 16,
-          scale: { start: 1.0, end: 0 },
-          angle: { min: 0, max: 360 },
-          alpha: { start: 1, end: 0 }
-        })
-        if (this.boardMask) emitter.setMask(this.boardMask)
-        emitter.emitParticleAt(cell.sprite.x, cell.sprite.y)
-        this.time.delayedCall(700, () => emitter.destroy())
+        // Enhanced particle effects (pooled emitter)
+        this.explodeSpark(cell.sprite.x, cell.sprite.y)
         
         // Enhanced pop animation with easing
         const sprite = cell.sprite
@@ -1649,9 +1690,11 @@ export class GameScene extends Phaser.Scene {
   private playTone(freq: number, duration = 0.12, volume = 0.4) {
     try {
       if (this.muted) return
+      if (this.toneActive >= 3) return
       const audioManager = this.sound as any
       const ctx = audioManager?.context || audioManager?.audioContext
       if (!ctx) return
+      this.toneActive++
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
       osc.type = 'sine'
@@ -1660,7 +1703,9 @@ export class GameScene extends Phaser.Scene {
       osc.connect(gain).connect(ctx.destination)
       osc.start()
       gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration)
-      osc.stop(ctx.currentTime + duration + 0.02)
+      const stopAt = ctx.currentTime + duration + 0.02
+      osc.stop(stopAt)
+      setTimeout(() => { this.toneActive = Math.max(0, this.toneActive - 1) }, duration * 1000 + 80)
     } catch {}
   }
   private startBgm() {
